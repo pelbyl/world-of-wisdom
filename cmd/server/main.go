@@ -16,13 +16,15 @@ func main() {
 		port       = flag.String("port", ":8080", "TCP port to listen on")
 		difficulty = flag.Int("difficulty", 2, "Initial difficulty (1-6)")
 		timeout    = flag.Duration("timeout", 30*time.Second, "Client timeout")
+		adaptive   = flag.Bool("adaptive", true, "Enable adaptive difficulty")
 	)
 	flag.Parse()
 
 	cfg := server.Config{
-		Port:       *port,
-		Difficulty: *difficulty,
-		Timeout:    *timeout,
+		Port:         *port,
+		Difficulty:   *difficulty,
+		Timeout:      *timeout,
+		AdaptiveMode: *adaptive,
 	}
 
 	srv, err := server.NewServer(cfg)
