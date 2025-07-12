@@ -42,7 +42,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
               Connecting
             </Badge>
           </Group>
-          
+
           <Alert icon={<IconInfoCircle size={16} />} color="blue">
             <Text size="sm">
               <strong>Setting up real-time metrics...</strong>
@@ -56,7 +56,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
           </Alert>
 
           <Progress size="sm" animated color="blue" value={100} />
-          
+
           <Text size="sm" c="dimmed" ta="center">
             This may take a few seconds on first load
           </Text>
@@ -65,8 +65,8 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
     )
   }
 
-  const successRate = metrics.puzzlesSolvedTotal + metrics.puzzlesFailedTotal > 0 
-    ? (metrics.puzzlesSolvedTotal / (metrics.puzzlesSolvedTotal + metrics.puzzlesFailedTotal)) * 100 
+  const successRate = metrics.puzzlesSolvedTotal + metrics.puzzlesFailedTotal > 0
+    ? (metrics.puzzlesSolvedTotal / (metrics.puzzlesSolvedTotal + metrics.puzzlesFailedTotal)) * 100
     : 0
 
   const lineChartData = metricsHistory.map((m, index) => ({
@@ -84,15 +84,15 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
       <Paper p="lg" withBorder>
         <Group justify="space-between" mb="lg">
           <Title order={3}>Live Metrics Dashboard</Title>
-          <Badge 
-            color="green" 
-            variant="light" 
+          <Badge
+            color="green"
+            variant="light"
             leftSection={<IconWifi size={12} />}
           >
             Live Data Connected
           </Badge>
         </Group>
-        
+
         {/* Key Metrics Cards */}
         <Grid>
           <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
@@ -111,8 +111,8 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                 </ThemeIcon>
               </Group>
               <Badge color={difficultyColor} variant="light" size="sm" mt="sm">
-                {metrics.currentDifficulty >= 4 ? 'High Security' : 
-                 metrics.currentDifficulty >= 3 ? 'Medium Security' : 'Normal'}
+                {metrics.currentDifficulty >= 4 ? 'High Security' :
+                  metrics.currentDifficulty >= 3 ? 'Medium Security' : 'Normal'}
               </Badge>
             </Paper>
           </Grid.Col>
@@ -217,12 +217,19 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                 data={lineChartData}
                 dataKey="time"
                 series={[
-                  { name: 'solveTime', color: 'red.6', label: 'Solve Time (ms)' }
+                  {
+                    name: 'solveTime',
+                    color: 'red.6',
+                    label: 'Solve Time (ms)'
+                  }
                 ]}
                 curveType="linear"
                 withLegend
                 withDots={false}
-                yAxisProps={{ domain: ['dataMin', 'dataMax'] }}
+                yAxisProps={{
+                  domain: ['dataMin', 'dataMax'],
+                  tickFormatter: (value: number) => `${value.toFixed(1)} ms`,
+                }}
               />
             ) : (
               <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
@@ -261,16 +268,16 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
               Adaptive difficulty adjustments: {metrics.difficultyAdjustments}
             </Text>
           </div>
-          <Badge 
+          <Badge
             color={metrics.connectionRate > 20 ? 'red' : metrics.connectionRate > 10 ? 'orange' : 'green'}
             variant="light"
             size="lg"
           >
-            {metrics.connectionRate > 20 ? 'High Load Detected' : 
-             metrics.connectionRate > 10 ? 'Moderate Load' : 'Normal Operation'}
+            {metrics.connectionRate > 20 ? 'High Load Detected' :
+              metrics.connectionRate > 10 ? 'Moderate Load' : 'Normal Operation'}
           </Badge>
         </Group>
-        
+
         {metrics.connectionRate > 20 && (
           <Text size="sm" c="red" mt="sm">
             ⚠️ High connection rate detected - difficulty automatically increased to {metrics.currentDifficulty}

@@ -32,7 +32,7 @@ function App() {
     if (lastMessage) {
       try {
         const data = JSON.parse(lastMessage.data)
-        
+
         switch (data.type) {
           case 'block':
             setBlocks(prev => [...prev, data.block])
@@ -41,7 +41,7 @@ function App() {
             setCurrentChallenges(prev => [...prev, data.challenge])
             break
           case 'challenge_update':
-            setCurrentChallenges(prev => 
+            setCurrentChallenges(prev =>
               prev.map(c => c.id === data.challenge.id ? data.challenge : c)
             )
             break
@@ -82,7 +82,7 @@ function App() {
   }, [lastMessage])
 
   const handleStartMining = (config?: any) => {
-    const message = config 
+    const message = config
       ? JSON.stringify({ type: 'start_mining', config })
       : JSON.stringify({ type: 'start_mining' })
     sendMessage(message)
@@ -100,8 +100,8 @@ function App() {
           <Stack gap="xs">
             <Group justify="space-between" align="center">
               <Title order={1}>Word of Wisdom - Blockchain Visualizer</Title>
-              <Badge 
-                color={readyState === 1 ? 'green' : 'red'} 
+              <Badge
+                color={readyState === 1 ? 'green' : 'red'}
                 size="lg"
                 variant="dot"
               >
@@ -114,6 +114,17 @@ function App() {
           </Stack>
 
           <Grid>
+            <Grid.Col span={12}>
+              <Paper shadow="xs" p="md" withBorder>
+                <Title order={3} mb="md">Smart Mining Control</Title>
+                <MiningConfigPanel
+                  onStartMining={handleStartMining}
+                  onStopMining={handleStopMining}
+                  miningActive={miningActive}
+                />
+              </Paper>
+            </Grid.Col>
+
             <Grid.Col span={12}>
               <MetricsDashboard metrics={metrics} />
             </Grid.Col>
@@ -144,17 +155,6 @@ function App() {
                   <ConnectionsPanel connections={connections} />
                 </Paper>
               </Stack>
-            </Grid.Col>
-
-            <Grid.Col span={8}>
-              <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">Smart Mining Control</Title>
-                <MiningConfigPanel 
-                  onStartMining={handleStartMining}
-                  onStopMining={handleStopMining}
-                  miningActive={miningActive}
-                />
-              </Paper>
             </Grid.Col>
 
             <Grid.Col span={4}>
