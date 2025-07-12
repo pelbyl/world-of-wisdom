@@ -1,0 +1,2 @@
+2025/07/12 17:01:25 Failed to listen on :8080: listen tcp :8080: bind: address already in use
+exit status 1
