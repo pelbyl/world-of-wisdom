@@ -299,3 +299,7 @@ func (s *Server) GetStats() map[string]interface{} {
 		"last_adjustment":      s.lastAdjustment.Unix(),
 	}
 }
+
+func (s *Server) Addr() string {
+	return s.listener.Addr().String()
+}
