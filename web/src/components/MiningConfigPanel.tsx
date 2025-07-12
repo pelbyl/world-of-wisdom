@@ -30,6 +30,9 @@ interface MiningConfig {
   minMiners: number
   maxMiners: number
   duration: number
+  highPerformance?: boolean
+  maxDifficulty?: number
+  cpuIntensive?: boolean
 }
 
 interface Props {
@@ -46,12 +49,15 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
     autoScale: true,
     minMiners: 2,
     maxMiners: 25,
-    duration: 0
+    duration: 0,
+    highPerformance: false,
+    maxDifficulty: 6,
+    cpuIntensive: false
   })
 
   const [showAdvanced, setShowAdvanced] = useState(false)
 
-  const handleQuickStart = (preset: 'demo' | 'stress' | 'ddos') => {
+  const handleQuickStart = (preset: 'demo' | 'stress' | 'ddos' | 'extreme') => {
     let quickConfig: MiningConfig
     
     switch (preset) {
@@ -63,7 +69,10 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
           autoScale: true,
           minMiners: 2,
           maxMiners: 8,
-          duration: 60
+          duration: 60,
+          highPerformance: false,
+          maxDifficulty: 4,
+          cpuIntensive: false
         }
         break
       case 'stress':
@@ -74,18 +83,38 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
           autoScale: true,
           minMiners: 5,
           maxMiners: 20,
-          duration: 120
+          duration: 120,
+          highPerformance: false,
+          maxDifficulty: 5,
+          cpuIntensive: false
         }
         break
       case 'ddos':
         quickConfig = {
           initialIntensity: 3,
-          maxIntensity: 3,
+          maxIntensity: 4,
           intensityStep: 10,
           autoScale: false,
           minMiners: 15,
           maxMiners: 30,
-          duration: 180
+          duration: 180,
+          highPerformance: false,
+          maxDifficulty: 6,
+          cpuIntensive: false
+        }
+        break
+      case 'extreme':
+        quickConfig = {
+          initialIntensity: 4,
+          maxIntensity: 4,
+          intensityStep: 5,
+          autoScale: true,
+          minMiners: 20,
+          maxMiners: 100,
+          duration: 300,
+          highPerformance: true,
+          maxDifficulty: 8,
+          cpuIntensive: true
         }
         break
     }
@@ -102,7 +131,8 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
     switch (level) {
       case 1: return 'green'
       case 2: return 'yellow'
-      case 3: return 'red'
+      case 3: return 'orange'
+      case 4: return 'red'
       default: return 'gray'
     }
   }
@@ -113,7 +143,7 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
       <Card withBorder p="md">
         <Text size="sm" fw={500} mb="md">🚀 Quick Start Presets</Text>
         <Grid>
-          <Grid.Col span={4}>
+          <Grid.Col span={3}>
             <Tooltip label="Light demo - 2-8 miners, 60 seconds">
               <Button
                 fullWidth
@@ -128,7 +158,7 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
             </Tooltip>
           </Grid.Col>
           
-          <Grid.Col span={4}>
+          <Grid.Col span={3}>
             <Tooltip label="Medium load - 5-20 miners, 2 minutes">
               <Button
                 fullWidth
@@ -143,17 +173,32 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
             </Tooltip>
           </Grid.Col>
           
-          <Grid.Col span={4}>
+          <Grid.Col span={3}>
             <Tooltip label="Heavy load - triggers DDoS protection, 3 minutes">
               <Button
                 fullWidth
                 variant="light"
-                color="red"
+                color="orange"
                 leftSection={<IconUsers size={16} />}
                 onClick={() => handleQuickStart('ddos')}
                 disabled={miningActive}
               >
                 DDoS Demo
+              </Button>
+            </Tooltip>
+          </Grid.Col>
+          
+          <Grid.Col span={3}>
+            <Tooltip label="Maximum performance - 20-100 miners, CPU intensive, 5 minutes">
+              <Button
+                fullWidth
+                variant="light"
+                color="red"
+                leftSection={<IconCpu size={16} />}
+                onClick={() => handleQuickStart('extreme')}
+                disabled={miningActive}
+              >
+                🚀 Extreme
               </Button>
             </Tooltip>
           </Grid.Col>
@@ -198,7 +243,7 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
                 <NumberInput
                   label="Max Intensity"
                   min={1}
-                  max={3}
+                  max={4}
                   value={config.maxIntensity}
                   onChange={(val) => setConfig({...config, maxIntensity: Number(val)})}
                   rightSection={
@@ -256,12 +301,41 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
               </Tooltip>
             </Group>
 
-            <Switch
-              label="Auto-Scale Intensity"
-              description="Automatically increase network intensity over time"
-              checked={config.autoScale}
-              onChange={(event) => setConfig({...config, autoScale: event.currentTarget.checked})}
-            />
+            <Group grow>
+              <Tooltip label="Maximum PoW difficulty (1-8)">
+                <NumberInput
+                  label="Max Difficulty"
+                  min={1}
+                  max={8}
+                  value={config.maxDifficulty}
+                  onChange={(val) => setConfig({...config, maxDifficulty: Number(val)})}
+                  description="Higher = more CPU intensive"
+                />
+              </Tooltip>
+            </Group>
+
+            <Stack gap="xs">
+              <Switch
+                label="Auto-Scale Intensity"
+                description="Automatically increase network intensity over time"
+                checked={config.autoScale}
+                onChange={(event) => setConfig({...config, autoScale: event.currentTarget.checked})}
+              />
+              
+              <Switch
+                label="High Performance Mode"
+                description="Enable resource-aware scaling for maximum throughput"
+                checked={config.highPerformance}
+                onChange={(event) => setConfig({...config, highPerformance: event.currentTarget.checked})}
+              />
+              
+              <Switch
+                label="CPU Intensive"
+                description="Use maximum CPU resources and higher difficulties"
+                checked={config.cpuIntensive}
+                onChange={(event) => setConfig({...config, cpuIntensive: event.currentTarget.checked})}
+              />
+            </Stack>
           </Stack>
         </Card>
       )}
