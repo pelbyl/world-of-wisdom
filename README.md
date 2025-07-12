@@ -54,6 +54,8 @@ A production-ready TCP server in Go that serves random quotes ("words of wisdom"
 
 ![lib](images/lib.jpeg)
 
+‼️‼️‼️ SHA-256 used as a basic example, but it's not the best choice for a PoW algorithm. Next step is to replace it with  Memory-Hard Hash Puzzles (Argon2 or Scrypt – Argon2 preferred). ‼️‼️‼️
+
 ### Why SHA-256?
 
 We chose SHA-256 for our Proof-of-Work implementation based on several critical factors:
