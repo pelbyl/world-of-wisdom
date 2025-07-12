@@ -1,6 +1,7 @@
-import { Stack, Text, Group, Badge, Button, ScrollArea, Card } from '@mantine/core'
-import { IconPlayerPlay, IconHash } from '@tabler/icons-react'
+import { Stack, Text, Group, Badge, Button, ScrollArea, Card, Alert, Progress } from '@mantine/core'
+import { IconPlayerPlay, IconHash, IconInfoCircle, IconCpu } from '@tabler/icons-react'
 import { Challenge } from '../types'
+import { useState } from 'react'
 
 interface Props {
   challenges: Challenge[]
@@ -8,25 +9,55 @@ interface Props {
 }
 
 export function ChallengePanel({ challenges, onSimulateClient }: Props) {
+  const [isSimulating, setIsSimulating] = useState(false)
   const recentChallenges = challenges.slice(-10).reverse()
+
+  const handleSimulateClient = () => {
+    setIsSimulating(true)
+    onSimulateClient()
+    // Reset after 5 seconds (typical mining time)
+    setTimeout(() => setIsSimulating(false), 5000)
+  }
 
   return (
     <Stack gap="md">
       <Group justify="space-between">
-        <Text size="lg" fw={500}>Recent Challenges</Text>
+        <Text size="lg" fw={500}>Mining Simulation</Text>
         <Button
-          leftSection={<IconPlayerPlay size={16} />}
+          leftSection={isSimulating ? <IconCpu size={16} /> : <IconPlayerPlay size={16} />}
           size="sm"
-          onClick={onSimulateClient}
+          onClick={handleSimulateClient}
+          loading={isSimulating}
+          disabled={isSimulating}
         >
-          Simulate Client
+          {isSimulating ? 'Mining...' : 'Simulate Client'}
         </Button>
       </Group>
 
+      {isSimulating && (
+        <Alert icon={<IconInfoCircle size={16} />} color="blue">
+          <Text size="sm">
+            <strong>Mining Process Started!</strong>
+            <br />
+            • Client connecting to TCP server
+            <br />
+            • Receiving PoW challenge (difficulty {challenges.length > 0 ? challenges[challenges.length - 1]?.difficulty || 'unknown' : 'unknown'})
+            <br />
+            • Computing SHA-256 hash solutions...
+          </Text>
+          <Progress size="sm" animated color="blue" mt="sm" value={100} />
+        </Alert>
+      )}
+
+      <Text size="sm" c="dimmed">
+        Click "Simulate Client" to start a virtual mining operation. Watch the blockchain grow in real-time!
+      </Text>
+
+      <Text size="sm" fw={500}>Recent Mining Activity</Text>
       <ScrollArea h={300}>
         <Stack gap="xs">
           {recentChallenges.length === 0 ? (
-            <Text c="dimmed" ta="center">No challenges yet</Text>
+            <Text c="dimmed" ta="center">No mining activity yet - click "Simulate Client" to start!</Text>
           ) : (
             recentChallenges.map(challenge => (
               <Card key={challenge.id} withBorder padding="sm">

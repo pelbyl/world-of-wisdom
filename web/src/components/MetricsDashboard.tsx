@@ -1,6 +1,6 @@
-import { Paper, Title, Grid, Group, Badge, Text, Stack, RingProgress, ThemeIcon } from '@mantine/core'
+import { Paper, Title, Grid, Group, Badge, Text, Stack, RingProgress, ThemeIcon, Loader, Alert, Progress } from '@mantine/core'
 import { LineChart, AreaChart } from '@mantine/charts'
-import { IconShield, IconClock, IconNetwork } from '@tabler/icons-react'
+import { IconShield, IconClock, IconNetwork, IconWifi, IconInfoCircle } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 
 interface MetricsData {
@@ -35,8 +35,32 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
   if (!metrics) {
     return (
       <Paper p="lg" withBorder>
-        <Title order={3}>Live Metrics Dashboard</Title>
-        <Text c="dimmed" mt="sm">Connecting to metrics...</Text>
+        <Stack gap="md">
+          <Group justify="space-between">
+            <Title order={3}>Live Metrics Dashboard</Title>
+            <Badge color="orange" variant="light" leftSection={<Loader size={12} />}>
+              Connecting
+            </Badge>
+          </Group>
+          
+          <Alert icon={<IconInfoCircle size={16} />} color="blue">
+            <Text size="sm">
+              <strong>Setting up real-time metrics...</strong>
+              <br />
+              • Connecting to Prometheus server
+              <br />
+              • Establishing WebSocket connection
+              <br />
+              • Loading current system status
+            </Text>
+          </Alert>
+
+          <Progress size="sm" animated color="blue" value={100} />
+          
+          <Text size="sm" c="dimmed" ta="center">
+            This may take a few seconds on first load
+          </Text>
+        </Stack>
       </Paper>
     )
   }
@@ -58,7 +82,16 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
   return (
     <Stack gap="lg">
       <Paper p="lg" withBorder>
-        <Title order={3} mb="lg">Live Metrics Dashboard</Title>
+        <Group justify="space-between" mb="lg">
+          <Title order={3}>Live Metrics Dashboard</Title>
+          <Badge 
+            color="green" 
+            variant="light" 
+            leftSection={<IconWifi size={12} />}
+          >
+            Live Data Connected
+          </Badge>
+        </Group>
         
         {/* Key Metrics Cards */}
         <Grid>

@@ -1,4 +1,4 @@
-import { MantineProvider, Container, Title, Grid, Paper, Group, Badge, Stack } from '@mantine/core'
+import { MantineProvider, Container, Title, Grid, Paper, Group, Badge, Stack, Text } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { useEffect, useState } from 'react'
 import { BlockchainVisualizer } from './components/BlockchainVisualizer'
@@ -23,7 +23,7 @@ function App() {
   })
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
 
-  const { sendMessage, lastMessage, readyState } = useWebSocket('ws://localhost:8081/ws')
+  const { sendMessage, lastMessage, readyState } = useWebSocket(`ws://${window.location.host}/ws`)
 
   useEffect(() => {
     if (lastMessage) {
@@ -70,16 +70,21 @@ function App() {
       <Notifications />
       <Container size="xl" py="md">
         <Stack gap="lg">
-          <Group justify="space-between" align="center">
-            <Title order={1}>Word of Wisdom - Blockchain Visualizer</Title>
-            <Badge 
-              color={readyState === 1 ? 'green' : 'red'} 
-              size="lg"
-              variant="dot"
-            >
-              {readyState === 1 ? 'Connected' : 'Disconnected'}
-            </Badge>
-          </Group>
+          <Stack gap="xs">
+            <Group justify="space-between" align="center">
+              <Title order={1}>Word of Wisdom - Blockchain Visualizer</Title>
+              <Badge 
+                color={readyState === 1 ? 'green' : 'red'} 
+                size="lg"
+                variant="dot"
+              >
+                {readyState === 1 ? 'Connected' : 'Disconnected'}
+              </Badge>
+            </Group>
+            <Text size="sm" c="dimmed">
+              Real-time visualization of a proof-of-work protected TCP server with adaptive DDoS protection
+            </Text>
+          </Stack>
 
           <Grid>
             <Grid.Col span={12}>
