@@ -1,40 +1,38 @@
 package main
 
 import (
+	"flag"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
-)
+	"time"
 
-const (
-	defaultPort = ":8080"
+	"world-of-wisdom/internal/server"
 )
 
 func main() {
-	port := defaultPort
-	if len(os.Args) > 1 {
-		port = os.Args[1]
+	var (
+		port       = flag.String("port", ":8080", "TCP port to listen on")
+		difficulty = flag.Int("difficulty", 2, "Initial difficulty (1-6)")
+		timeout    = flag.Duration("timeout", 30*time.Second, "Client timeout")
+	)
+	flag.Parse()
+
+	cfg := server.Config{
+		Port:       *port,
+		Difficulty: *difficulty,
+		Timeout:    *timeout,
 	}
 
-	listener, err := net.Listen("tcp", port)
+	srv, err := server.NewServer(cfg)
 	if err != nil {
-		log.Fatalf("Failed to listen on %s: %v", port, err)
+		log.Fatalf("Failed to create server: %v", err)
 	}
-	defer listener.Close()
-
-	log.Printf("TCP server listening on %s", port)
 
 	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				log.Printf("Failed to accept connection: %v", err)
-				continue
-			}
-
-			go handleConnection(conn)
+		if err := srv.Start(); err != nil {
+			log.Fatalf("Server error: %v", err)
 		}
 	}()
 
@@ -42,17 +40,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	log.Println("Shutting down server...")
-}
-
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-	
-	log.Printf("New connection from %s", conn.RemoteAddr())
-	
-	_, err := conn.Write([]byte("Connected to Word of Wisdom server\n"))
-	if err != nil {
-		log.Printf("Failed to write to connection: %v", err)
-		return
+	if err := srv.Shutdown(); err != nil {
+		log.Printf("Error during shutdown: %v", err)
 	}
 }
