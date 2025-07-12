@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"world-of-wisdom/pkg/metrics"
 	"world-of-wisdom/pkg/pow"
 	"world-of-wisdom/pkg/wisdom"
 )
@@ -21,12 +22,20 @@ type Server struct {
 	mu             sync.RWMutex
 	activeConns    sync.WaitGroup
 	shutdownChan   chan struct{}
+	
+	// Adaptive difficulty tracking
+	solveTimes     []time.Duration
+	connectionRate int64
+	lastAdjustment time.Time
+	adaptiveMode   bool
 }
 
 type Config struct {
-	Port       string
-	Difficulty int
-	Timeout    time.Duration
+	Port         string
+	Difficulty   int
+	Timeout      time.Duration
+	AdaptiveMode bool
+	MetricsPort  string
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -36,11 +45,14 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	return &Server{
-		listener:      listener,
-		quoteProvider: wisdom.NewQuoteProvider(),
-		difficulty:    cfg.Difficulty,
-		timeout:       cfg.Timeout,
-		shutdownChan:  make(chan struct{}),
+		listener:       listener,
+		quoteProvider:  wisdom.NewQuoteProvider(),
+		difficulty:     cfg.Difficulty,
+		timeout:        cfg.Timeout,
+		shutdownChan:   make(chan struct{}),
+		solveTimes:     make([]time.Duration, 0, 100),
+		lastAdjustment: time.Now(),
+		adaptiveMode:   cfg.AdaptiveMode,
 	}, nil
 }
 
@@ -78,6 +90,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	conn.SetDeadline(time.Now().Add(s.timeout))
 
+	// Track connection rate for adaptive difficulty
+	s.trackConnection()
+
 	challenge, err := pow.GenerateChallenge(s.getDifficulty())
 	if err != nil {
 		log.Printf("Failed to generate challenge: %v", err)
@@ -91,6 +106,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
+	solveStart := time.Now()
 	scanner := bufio.NewScanner(conn)
 	if !scanner.Scan() {
 		log.Printf("Client %s disconnected or timed out", clientAddr)
@@ -98,9 +114,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	response := strings.TrimSpace(scanner.Text())
+	solveTime := time.Since(solveStart)
 
 	if pow.VerifyPoW(challenge.Seed, response, challenge.Difficulty) {
-		log.Printf("Client %s solved the challenge", clientAddr)
+		log.Printf("Client %s solved the challenge in %v", clientAddr, solveTime)
+		s.recordSolveTime(solveTime)
 		quote := s.quoteProvider.GetRandomQuote()
 		conn.Write([]byte(quote + "\n"))
 	} else {
@@ -149,4 +167,102 @@ func (s *Server) Shutdown() error {
 	}
 
 	return nil
+}
+
+func (s *Server) trackConnection() {
+	if !s.adaptiveMode {
+		return
+	}
+	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.connectionRate++
+}
+
+func (s *Server) recordSolveTime(solveTime time.Duration) {
+	if !s.adaptiveMode {
+		return
+	}
+	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.solveTimes = append(s.solveTimes, solveTime)
+	
+	// Keep only last 50 solve times
+	if len(s.solveTimes) > 50 {
+		s.solveTimes = s.solveTimes[len(s.solveTimes)-50:]
+	}
+	
+	// Adjust difficulty every 10 solutions or every 30 seconds
+	if len(s.solveTimes) >= 10 || time.Since(s.lastAdjustment) > 30*time.Second {
+		s.adjustDifficulty()
+	}
+}
+
+func (s *Server) adjustDifficulty() {
+	if len(s.solveTimes) == 0 {
+		return
+	}
+	
+	// Calculate average solve time
+	var total time.Duration
+	for _, t := range s.solveTimes {
+		total += t
+	}
+	avgSolveTime := total / time.Duration(len(s.solveTimes))
+	
+	oldDifficulty := s.difficulty
+	
+	// Adaptive difficulty rules:
+	// - If avg solve time < 1s: increase difficulty
+	// - If avg solve time > 5s: decrease difficulty
+	// - If connection rate is high (>20/min): increase difficulty
+	
+	connectionRatePerMinute := float64(s.connectionRate) / time.Since(s.lastAdjustment).Minutes()
+	
+	if avgSolveTime < time.Second || connectionRatePerMinute > 20 {
+		if s.difficulty < 6 {
+			s.difficulty++
+		}
+	} else if avgSolveTime > 5*time.Second && connectionRatePerMinute < 5 {
+		if s.difficulty > 1 {
+			s.difficulty--
+		}
+	}
+	
+	if s.difficulty != oldDifficulty {
+		log.Printf("Adaptive difficulty: %d -> %d (avg solve: %v, rate: %.1f/min)", 
+			oldDifficulty, s.difficulty, avgSolveTime, connectionRatePerMinute)
+	}
+	
+	// Reset tracking
+	s.solveTimes = s.solveTimes[:0]
+	s.connectionRate = 0
+	s.lastAdjustment = time.Now()
+}
+
+func (s *Server) GetStats() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	var avgSolveTime time.Duration
+	if len(s.solveTimes) > 0 {
+		var total time.Duration
+		for _, t := range s.solveTimes {
+			total += t
+		}
+		avgSolveTime = total / time.Duration(len(s.solveTimes))
+	}
+	
+	connectionRatePerMinute := float64(s.connectionRate) / time.Since(s.lastAdjustment).Minutes()
+	
+	return map[string]interface{}{
+		"difficulty":           s.difficulty,
+		"adaptive_mode":        s.adaptiveMode,
+		"avg_solve_time_ms":    avgSolveTime.Milliseconds(),
+		"connection_rate":      connectionRatePerMinute,
+		"recent_solve_count":   len(s.solveTimes),
+		"last_adjustment":      s.lastAdjustment.Unix(),
+	}
 }
