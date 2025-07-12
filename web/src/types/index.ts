@@ -41,3 +41,15 @@ export interface ClientConnection {
   status: 'connected' | 'solving' | 'disconnected'
   challengesCompleted: number
 }
+
+export interface MetricsData {
+  timestamp: number
+  connectionsTotal: number
+  currentDifficulty: number
+  puzzlesSolvedTotal: number
+  puzzlesFailedTotal: number
+  averageSolveTime: number
+  connectionRate: number
+  difficultyAdjustments: number
+  activeConnections: number
+}
