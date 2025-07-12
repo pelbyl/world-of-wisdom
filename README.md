@@ -18,6 +18,7 @@ A production-ready TCP server in Go that serves random quotes ("words of wisdom"
 - [Development](#development)
 - [Performance Analysis](#performance-analysis)
 - [Testing](#testing)
+- [Frontend Demo](#frontend-demo)
 
 ## Features
 
@@ -908,6 +909,10 @@ jobs:
     - run: go test -v ./tests/
     - run: docker-compose up --abort-on-container-exit
 ```
+
+## Frontend Demo
+
+![front-demo](images/front-demo.png)
 
 ---
 
