@@ -32,6 +32,8 @@ export interface MiningStats {
   averageSolveTime: number
   currentDifficulty: number
   hashRate: number
+  liveConnections?: number
+  totalConnections?: number
 }
 
 export interface ClientConnection {

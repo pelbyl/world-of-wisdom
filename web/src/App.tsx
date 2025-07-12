@@ -65,6 +65,7 @@ function App() {
             setBlocks(data.blocks || [])
             setConnections(data.connections || [])
             setStats(data.stats || stats)
+            setMiningActive(data.miningActive || false)
             break
         }
       } catch (error) {
