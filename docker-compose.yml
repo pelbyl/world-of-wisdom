@@ -10,6 +10,29 @@ services:
     networks:
       - wisdom-net
 
+  webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.webserver
+    ports:
+      - "8081:8081"
+    depends_on:
+      - server
+    command: ["./webserver", "-tcp-server", "server:8080"]
+    networks:
+      - wisdom-net
+
+  web:
+    build:
+      context: ./web
+      dockerfile: ../Dockerfile.web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - webserver
+    networks:
+      - wisdom-net
+
   client:
     build:
       context: .
