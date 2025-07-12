@@ -10,6 +10,8 @@ A high-performance TCP server in Go that serves random quotes ("words of wisdom"
 - **Docker Support**: Containerized deployment for both server and client
 - **Connection Timeouts**: Automatic cleanup of stale connections
 - **Random Wisdom Quotes**: Serves from a curated collection of 25+ quotes
+- **Web Visualization**: Real-time blockchain visualization with Mantine UI
+- **WebSocket Updates**: Live monitoring of mining operations and connections
 
 ## Architecture
 
@@ -28,27 +30,44 @@ Client connects → Server sends challenge → Client solves PoW → Server veri
 
 ## Quick Start
 
-### Using Docker Compose
+### Web Visualization
 
 ```bash
-# Build and run both server and client
+# Start all services with web UI
+make dev
+
+# Or using Docker Compose (includes web interface)
 docker-compose up
 
-# Run server only
-docker run -p 8080:8080 world-of-wisdom-server
-
-# Run client
-docker run world-of-wisdom-client -server host.docker.internal:8080
+# Visit http://localhost:3000 for the blockchain visualizer
 ```
 
-### Using Go
+### Command Line Interface
 
 ```bash
-# Run server
+# Run server only
 go run cmd/server/main.go -difficulty 3
 
 # Run client
 go run cmd/client/main.go -server localhost:8080 -attempts 5
+
+# Run web server with visualization
+go run cmd/webserver/main.go
+```
+
+### Docker Services
+
+```bash
+# Build all images
+make docker-build
+
+# Run complete stack
+docker-compose up
+
+# Individual services
+docker run -p 8080:8080 world-of-wisdom-server
+docker run -p 8081:8081 world-of-wisdom-webserver
+docker run -p 3000:3000 world-of-wisdom-web
 ```
 
 ## Configuration
@@ -97,16 +116,32 @@ On a MacBook Pro (M3):
 
 ```
 ├── cmd/
-│   ├── server/     # Server entry point
-│   └── client/     # Client entry point
+│   ├── server/     # TCP Server entry point
+│   ├── client/     # TCP Client entry point
+│   └── webserver/  # Web/WebSocket server
 ├── internal/
-│   ├── server/     # Server implementation
-│   └── client/     # Client implementation
+│   ├── server/     # TCP Server implementation
+│   ├── client/     # TCP Client implementation
+│   └── webserver/  # Web server with blockchain simulation
 ├── pkg/
 │   ├── pow/        # Proof-of-Work logic
 │   └── wisdom/     # Quote management
-└── docker/         # Dockerfiles
+├── web/            # React frontend with Mantine UI
+│   ├── src/
+│   │   ├── components/  # Visualization components
+│   │   ├── hooks/       # WebSocket hooks
+│   │   └── types/       # TypeScript types
+└── scripts/        # Development scripts
 ```
+
+### Web Visualization Features
+
+- **Real-time Blockchain**: Visual representation of mined blocks
+- **Mining Monitor**: Live view of active PoW challenges being solved
+- **Network Stats**: Current difficulty, hash rate, success rate
+- **Connection Panel**: Active clients and their status
+- **Interactive Simulation**: Button to simulate new clients
+- **WebSocket Updates**: Real-time updates without polling
 
 ### Testing
 
