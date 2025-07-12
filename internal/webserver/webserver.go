@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -53,6 +54,7 @@ type WebServer struct {
 	activeMinerCount  int  // concurrent miners
 	cpuCores          int  // available CPU cores
 	maxConcurrency    int  // resource-based max miners
+	dataDir           string // directory for persistent storage
 }
 
 type Challenge struct {
@@ -136,13 +138,21 @@ type LogMessage struct {
 	Icon      string `json:"icon,omitempty"`
 }
 
+type PersistentData struct {
+	Blockchain       []Block                      `json:"blockchain"`
+	Stats            *MiningStats                 `json:"stats"`
+	TotalConnections int                          `json:"totalConnections"`
+	LastUpdated      int64                        `json:"lastUpdated"`
+	Connections      map[string]*ClientConnection `json:"connections"`
+}
+
 func NewWebServer(tcpServerAddr string) *WebServer {
 	cpuCores := runtime.NumCPU()
 	maxConcurrency := cpuCores * 10 // 10 miners per CPU core
 	
 	log.Printf("🖥️  Detected %d CPU cores, max concurrency: %d miners", cpuCores, maxConcurrency)
 	
-	return &WebServer{
+	ws := &WebServer{
 		tcpServerAddr: tcpServerAddr,
 		clients:       make(map[*websocket.Conn]bool),
 		blockchain:    make([]Block, 0),
@@ -153,6 +163,7 @@ func NewWebServer(tcpServerAddr string) *WebServer {
 			AverageSolveTime:  0,
 			HashRate:          0,
 		},
+		dataDir:        "/tmp/wisdom-data",
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -167,6 +178,77 @@ func NewWebServer(tcpServerAddr string) *WebServer {
 		cpuCores:         cpuCores,
 		maxConcurrency:   maxConcurrency,
 	}
+	
+	// Create data directory and load persistent data
+	os.MkdirAll(ws.dataDir, 0755)
+	ws.loadData()
+	
+	return ws
+}
+
+// Load persistent data from disk
+func (ws *WebServer) loadData() {
+	filePath := ws.dataDir + "/blockchain.json"
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Printf("📂 No existing data found, starting fresh")
+		return
+	}
+	
+	var persistentData PersistentData
+	if err := json.Unmarshal(data, &persistentData); err != nil {
+		log.Printf("❌ Failed to load data: %v", err)
+		return
+	}
+	
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	
+	ws.blockchain = persistentData.Blockchain
+	if persistentData.Stats != nil {
+		ws.stats = persistentData.Stats
+	}
+	ws.totalConnections = persistentData.TotalConnections
+	if persistentData.Connections != nil {
+		ws.connections = persistentData.Connections
+	}
+	
+	log.Printf("📂 Loaded %d blocks and %d connections from storage", len(ws.blockchain), len(ws.connections))
+}
+
+// Save current state to disk
+func (ws *WebServer) saveData() {
+	ws.mu.RLock()
+	persistentData := PersistentData{
+		Blockchain:       ws.blockchain,
+		Stats:            ws.stats,
+		TotalConnections: ws.totalConnections,
+		LastUpdated:      time.Now().UnixMilli(),
+		Connections:      ws.connections,
+	}
+	ws.mu.RUnlock()
+	
+	data, err := json.MarshalIndent(persistentData, "", "  ")
+	if err != nil {
+		log.Printf("❌ Failed to serialize data: %v", err)
+		return
+	}
+	
+	filePath := ws.dataDir + "/blockchain.json"
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		log.Printf("❌ Failed to save data: %v", err)
+		return
+	}
+}
+
+// Auto-save data periodically
+func (ws *WebServer) startAutoSave() {
+	ticker := time.NewTicker(10 * time.Second)
+	go func() {
+		for range ticker.C {
+			ws.saveData()
+		}
+	}()
 }
 
 func (ws *WebServer) broadcastLog(level, message, icon string) {
@@ -1402,6 +1484,7 @@ func (ws *WebServer) startMetricsBroadcast() {
 func (ws *WebServer) Start() {
 	log.Println("WebServer started")
 	ws.startMetricsBroadcast()
+	ws.startAutoSave()
 }
 
 func (ws *WebServer) Stop() {

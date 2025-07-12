@@ -105,15 +105,15 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
         break
       case 'extreme':
         quickConfig = {
-          initialIntensity: 4,
+          initialIntensity: 3,
           maxIntensity: 4,
-          intensityStep: 5,
+          intensityStep: 10,
           autoScale: true,
-          minMiners: 20,
-          maxMiners: 100,
-          duration: 300,
+          minMiners: 10,
+          maxMiners: 40,
+          duration: 180,
           highPerformance: true,
-          maxDifficulty: 8,
+          maxDifficulty: 6,
           cpuIntensive: true
         }
         break
@@ -189,7 +189,7 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
           </Grid.Col>
           
           <Grid.Col span={3}>
-            <Tooltip label="Maximum performance - 20-100 miners, CPU intensive, 5 minutes">
+            <Tooltip label="High performance - 10-40 miners, CPU intensive, 3 minutes">
               <Button
                 fullWidth
                 variant="light"
