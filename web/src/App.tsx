@@ -5,10 +5,11 @@ import { BlockchainVisualizer } from './components/BlockchainVisualizer'
 import { MiningVisualizer } from './components/MiningVisualizer'
 import { ConnectionsPanel } from './components/ConnectionsPanel'
 import { StatsPanel } from './components/StatsPanel'
-import { ChallengePanel } from './components/ChallengePanel'
+import { MiningConfigPanel } from './components/MiningConfigPanel'
 import { MetricsDashboard } from './components/MetricsDashboard'
+import { LogsPanel } from './components/LogsPanel'
 import { useWebSocket } from './hooks/useWebSocket'
-import { Block, Challenge, ClientConnection, MiningStats, MetricsData } from './types'
+import { Block, Challenge, ClientConnection, MiningStats, MetricsData, LogMessage } from './types'
 
 function App() {
   const [blocks, setBlocks] = useState<Block[]>([])
@@ -23,6 +24,7 @@ function App() {
   })
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [miningActive, setMiningActive] = useState(false)
+  const [logs, setLogs] = useState<LogMessage[]>([])
 
   const { sendMessage, lastMessage, readyState } = useWebSocket('ws://localhost:8081/ws')
 
@@ -61,6 +63,11 @@ function App() {
           case 'mining_status':
             setMiningActive(data.miningActive || false)
             break
+          case 'log':
+            if (data.log) {
+              setLogs(prev => [...prev.slice(-99), data.log]) // Keep last 100 logs
+            }
+            break
           case 'init':
             setBlocks(data.blocks || [])
             setConnections(data.connections || [])
@@ -74,8 +81,11 @@ function App() {
     }
   }, [lastMessage])
 
-  const handleStartMining = () => {
-    sendMessage(JSON.stringify({ type: 'start_mining' }))
+  const handleStartMining = (config?: any) => {
+    const message = config 
+      ? JSON.stringify({ type: 'start_mining', config })
+      : JSON.stringify({ type: 'start_mining' })
+    sendMessage(message)
   }
 
   const handleStopMining = () => {
@@ -136,16 +146,21 @@ function App() {
               </Stack>
             </Grid.Col>
 
-            <Grid.Col span={12}>
+            <Grid.Col span={8}>
               <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">Mining Simulation</Title>
-                <ChallengePanel 
-                  challenges={currentChallenges} 
-                  onSimulateClient={() => sendMessage(JSON.stringify({ type: 'simulate_client' }))}
+                <Title order={3} mb="md">Smart Mining Control</Title>
+                <MiningConfigPanel 
                   onStartMining={handleStartMining}
                   onStopMining={handleStopMining}
                   miningActive={miningActive}
                 />
+              </Paper>
+            </Grid.Col>
+
+            <Grid.Col span={4}>
+              <Paper shadow="xs" p="md" withBorder>
+                <Title order={3} mb="md">Network Activity Logs</Title>
+                <LogsPanel logs={logs} />
               </Paper>
             </Grid.Col>
           </Grid>

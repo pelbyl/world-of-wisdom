@@ -34,6 +34,9 @@ export interface MiningStats {
   hashRate: number
   liveConnections?: number
   totalConnections?: number
+  networkIntensity?: number
+  ddosProtectionActive?: boolean
+  activeMinerCount?: number
 }
 
 export interface ClientConnection {
@@ -54,4 +57,11 @@ export interface MetricsData {
   connectionRate: number
   difficultyAdjustments: number
   activeConnections: number
+}
+
+export interface LogMessage {
+  timestamp: number
+  level: 'info' | 'success' | 'warning' | 'error'
+  message: string
+  icon?: string
 }
