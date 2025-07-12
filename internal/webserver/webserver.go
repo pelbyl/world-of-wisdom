@@ -291,19 +291,23 @@ func sanitizeStats(stats *MiningStats) {
 func (ws *WebServer) broadcast(msg WebSocketMessage) {
 	// Sanitize any metrics or stats before broadcasting
 	if msg.Metrics != nil {
-		log.Printf("Sanitizing metrics before broadcast")
 		sanitizeMetrics(msg.Metrics)
 	}
 	if msg.Stats != nil {
-		log.Printf("Sanitizing stats before broadcast: HashRate=%f, AvgSolveTime=%f", msg.Stats.HashRate, msg.Stats.AverageSolveTime)
 		sanitizeStats(msg.Stats)
-		log.Printf("After sanitization: HashRate=%f, AvgSolveTime=%f", msg.Stats.HashRate, msg.Stats.AverageSolveTime)
 	}
 	
-	ws.clientsMux.RLock()
-	defer ws.clientsMux.RUnlock()
+	ws.clientsMux.Lock()
+	defer ws.clientsMux.Unlock()
 
+	// Create a copy of clients to avoid concurrent map access
+	clientsCopy := make([]*websocket.Conn, 0, len(ws.clients))
 	for conn := range ws.clients {
+		clientsCopy = append(clientsCopy, conn)
+	}
+
+	// Write to clients outside the map iteration
+	for _, conn := range clientsCopy {
 		err := conn.WriteJSON(msg)
 		if err != nil {
 			log.Printf("WebSocket write error: %v", err)
@@ -1374,10 +1378,7 @@ func (ws *WebServer) startMetricsBroadcast() {
 	ticker := time.NewTicker(2 * time.Second)
 	go func() {
 		for range ticker.C {
-			// Temporarily disable Prometheus metrics to test basic WebSocket
-			log.Printf("Metrics broadcast disabled for debugging")
-			
-			// Send dummy metrics to test JSON serialization
+			// Fetch and broadcast Prometheus metrics
 			metrics := &MetricsData{
 				Timestamp:         time.Now().UnixMilli(),
 				ConnectionsTotal:  float64(len(ws.connections)),
