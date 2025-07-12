@@ -1,6 +1,8 @@
 services:
   server:
-    image: world-of-wisdom-server
+    build:
+      context: .
+      dockerfile: Dockerfile.server
     ports:
       - "8080:8080"
       - "2112:2112"
@@ -9,7 +11,9 @@ services:
       - wisdom-net
 
   webserver:
-    image: world-of-wisdom-webserver
+    build:
+      context: .
+      dockerfile: Dockerfile.webserver
     ports:
       - "8081:8081"
     depends_on:
@@ -31,6 +35,17 @@ services:
     depends_on:
       - server
     command: ["-server", "server:8080", "-attempts", "3"]
+    networks:
+      - wisdom-net
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "3000:80"
+    depends_on:
+      - webserver
     networks:
       - wisdom-net
 

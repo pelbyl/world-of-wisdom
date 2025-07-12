@@ -31,19 +31,29 @@ export function MiningVisualizer({ challenges }: Props) {
     c.status === 'solving' || c.status === 'pending'
   ).slice(-5)
 
-  if (activeChallenges.length === 0) {
-    return <Text c="dimmed">No active mining operations...</Text>
+  const recentChallenges = challenges.filter(c =>
+    c.status === 'completed' || c.status === 'failed'
+  ).slice(-3)
+
+  const allDisplayChallenges = [...activeChallenges, ...recentChallenges]
+
+  if (allDisplayChallenges.length === 0) {
+    return <Text c="dimmed">No mining operations yet - start mining to see activity!</Text>
   }
 
   return (
     <Stack gap="md">
-      {activeChallenges.map(challenge => (
+      {allDisplayChallenges.map(challenge => (
         <Card key={challenge.id} withBorder padding="sm">
           <Stack gap="xs">
             <Group justify="space-between">
               <Group gap="xs">
                 <Text size="sm" fw={500}>Client {challenge.clientId.substring(0, 8)}</Text>
-                <Badge size="sm" color={challenge.status === 'solving' ? 'blue' : 'gray'}>
+                <Badge size="sm" color={
+                  challenge.status === 'solving' ? 'blue' :
+                  challenge.status === 'completed' ? 'green' :
+                  challenge.status === 'failed' ? 'red' : 'gray'
+                }>
                   {challenge.status}
                 </Badge>
               </Group>

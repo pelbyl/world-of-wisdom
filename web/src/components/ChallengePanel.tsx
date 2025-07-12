@@ -1,14 +1,17 @@
 import { Stack, Text, Group, Badge, Button, ScrollArea, Card, Alert, Progress } from '@mantine/core'
-import { IconPlayerPlay, IconHash, IconInfoCircle, IconCpu } from '@tabler/icons-react'
+import { IconPlayerPlay, IconPlayerStop, IconHash, IconInfoCircle, IconCpu } from '@tabler/icons-react'
 import { Challenge } from '../types'
 import { useState } from 'react'
 
 interface Props {
   challenges: Challenge[]
   onSimulateClient: () => void
+  onStartMining: () => void
+  onStopMining: () => void
+  miningActive: boolean
 }
 
-export function ChallengePanel({ challenges, onSimulateClient }: Props) {
+export function ChallengePanel({ challenges, onSimulateClient, onStartMining, onStopMining, miningActive }: Props) {
   const [isSimulating, setIsSimulating] = useState(false)
   const recentChallenges = challenges.slice(-10).reverse()
 
@@ -23,21 +26,59 @@ export function ChallengePanel({ challenges, onSimulateClient }: Props) {
     <Stack gap="md">
       <Group justify="space-between">
         <Text size="lg" fw={500}>Mining Simulation</Text>
-        <Button
-          leftSection={isSimulating ? <IconCpu size={16} /> : <IconPlayerPlay size={16} />}
-          size="sm"
-          onClick={handleSimulateClient}
-          loading={isSimulating}
-          disabled={isSimulating}
-        >
-          {isSimulating ? 'Mining...' : 'Simulate Client'}
-        </Button>
+        <Group gap="sm">
+          <Button
+            leftSection={isSimulating ? <IconCpu size={16} /> : <IconPlayerPlay size={16} />}
+            size="sm"
+            onClick={handleSimulateClient}
+            loading={isSimulating}
+            disabled={isSimulating}
+            variant="light"
+          >
+            {isSimulating ? 'Mining...' : 'Single Client'}
+          </Button>
+          
+          {!miningActive ? (
+            <Button
+              leftSection={<IconPlayerPlay size={16} />}
+              size="sm"
+              onClick={onStartMining}
+              color="green"
+            >
+              Start Auto Mining
+            </Button>
+          ) : (
+            <Button
+              leftSection={<IconPlayerStop size={16} />}
+              size="sm"
+              onClick={onStopMining}
+              color="red"
+            >
+              Stop Auto Mining
+            </Button>
+          )}
+        </Group>
       </Group>
+
+      {miningActive && (
+        <Alert icon={<IconCpu size={16} />} color="green">
+          <Text size="sm">
+            <strong>Continuous Mining Active!</strong>
+            <br />
+            • Automatically spawning new clients every 2-6 seconds
+            <br />
+            • Simulating real blockchain network with multiple miners
+            <br />
+            • Watch the blockchain grow continuously!
+          </Text>
+          <Progress size="sm" animated color="green" mt="sm" value={100} />
+        </Alert>
+      )}
 
       {isSimulating && (
         <Alert icon={<IconInfoCircle size={16} />} color="blue">
           <Text size="sm">
-            <strong>Mining Process Started!</strong>
+            <strong>Single Mining Process Started!</strong>
             <br />
             • Client connecting to TCP server
             <br />
@@ -50,7 +91,7 @@ export function ChallengePanel({ challenges, onSimulateClient }: Props) {
       )}
 
       <Text size="sm" c="dimmed">
-        Click "Simulate Client" to start a virtual mining operation. Watch the blockchain grow in real-time!
+        Use "Single Client" for one-time mining or "Start Auto Mining" for continuous blockchain simulation like a real network!
       </Text>
 
       <Text size="sm" fw={500}>Recent Mining Activity</Text>

@@ -12,14 +12,15 @@ export function BlockchainVisualizer({ blocks }: Props) {
   }
 
   return (
-    <ScrollArea h={200}>
+    <ScrollArea h={400}>
       <Group align="stretch" wrap="nowrap">
         {blocks.map((block, index) => (
           <Group key={block.index} wrap="nowrap">
             <Card 
               withBorder 
-              w={300} 
-              padding="sm"
+              w={350} 
+              h={350}
+              padding="md"
               style={{ 
                 borderColor: block.solution ? '#40c057' : '#fd7e14',
                 borderWidth: 2 
@@ -67,8 +68,8 @@ export function BlockchainVisualizer({ blocks }: Props) {
 
                     {block.quote && (
                       <Tooltip label={block.quote}>
-                        <Text size="xs" lineClamp={2} c="blue">
-                          "{block.quote.substring(0, 50)}..."
+                        <Text size="sm" lineClamp={4} c="blue" fw={500}>
+                          "{block.quote.substring(0, 120)}..."
                         </Text>
                       </Tooltip>
                     )}
