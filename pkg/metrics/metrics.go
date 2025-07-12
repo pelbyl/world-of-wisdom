@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -151,10 +152,14 @@ func UpdateStats(avgSolveTime time.Duration, connectionRate float64, activeConns
 
 // StartMetricsServer starts the Prometheus metrics HTTP server
 func StartMetricsServer(port string) {
-	http.Handle("/metrics", promhttp.Handler())
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
 	go func() {
-		if err := http.ListenAndServe(port, nil); err != nil {
-			panic(err)
+		if err := http.ListenAndServe(port, mux); err != nil {
+			// Ignore "address already in use" errors for tests
+			if !strings.Contains(err.Error(), "address already in use") {
+				panic(err)
+			}
 		}
 	}()
 }
