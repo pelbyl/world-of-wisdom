@@ -1,4 +1,4 @@
-.PHONY: build test run-server run-client run-webserver run-web dev docker-build docker-run clean
+.PHONY: build test run-server run-client run-webserver run-web dev docker-build docker-run clean rebuild
 
 build:
 	mkdir -p bin
@@ -40,3 +40,9 @@ clean:
 	rm -rf bin/ logs/
 	docker-compose down
 	docker rmi world-of-wisdom-server world-of-wisdom-client world-of-wisdom-webserver world-of-wisdom-web || true
+
+re-run:
+	docker-compose down -v --remove-orphans
+	docker volume prune -f
+	docker-compose build --no-cache
+	docker-compose up -d --remove-orphans
