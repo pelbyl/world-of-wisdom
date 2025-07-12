@@ -137,10 +137,17 @@ function App() {
             </Grid.Col>
 
             <Grid.Col span={8}>
-              <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">Active Mining Operations</Title>
-                <MiningVisualizer challenges={currentChallenges} />
-              </Paper>
+              <Stack gap="md">
+                <Paper shadow="xs" p="md" withBorder>
+                  <Title order={3} mb="md">Active Mining Operations</Title>
+                  <MiningVisualizer challenges={currentChallenges} />
+                </Paper>
+
+                <Paper shadow="xs" p="md" withBorder>
+                  <Title order={3} mb="md">Network Activity Logs</Title>
+                  <LogsPanel logs={logs} />
+                </Paper>
+              </Stack>
             </Grid.Col>
 
             <Grid.Col span={4}>
@@ -155,13 +162,6 @@ function App() {
                   <ConnectionsPanel connections={connections} />
                 </Paper>
               </Stack>
-            </Grid.Col>
-
-            <Grid.Col span={4}>
-              <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">Network Activity Logs</Title>
-                <LogsPanel logs={logs} />
-              </Paper>
             </Grid.Col>
           </Grid>
         </Stack>
