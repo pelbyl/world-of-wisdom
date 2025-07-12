@@ -9,6 +9,15 @@ services:
     command: ["./server", "-difficulty", "2", "-adaptive", "true"]
     networks:
       - wisdom-net
+    # Resource limits for TCP server
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
 
   webserver:
     build:
@@ -21,6 +30,15 @@ services:
     command: ["./webserver", "-tcp-server", "server:8080"]
     networks:
       - wisdom-net
+    # Recommended resource limits for high-performance simulation
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'     # Increase for extreme simulation (up to 8.0)
+          memory: 2G      # Increase for large-scale mining (up to 4G)
+        reservations:
+          cpus: '2.0'
+          memory: 1G
 
   client1:
     image: world-of-wisdom-client
