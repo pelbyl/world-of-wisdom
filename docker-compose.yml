@@ -1,0 +1,25 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8080:8080"
+      - "2112:2112"
+    command: ["./server", "-difficulty", "3"]
+    networks:
+      - wisdom-net
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    depends_on:
+      - server
+    command: ["-server", "server:8080", "-attempts", "3"]
+    networks:
+      - wisdom-net
+
+networks:
+  wisdom-net:
+    driver: bridge

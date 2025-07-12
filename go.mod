@@ -1,3 +1,3 @@
 module world-of-wisdom
 
-go 1.24.3
+go 1.22
