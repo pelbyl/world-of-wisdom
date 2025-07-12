@@ -1,5 +1,5 @@
 import { Stack, Text, Group, RingProgress, ThemeIcon, Paper } from '@mantine/core'
-import { IconActivity, IconClock, IconHash, IconTrendingUp } from '@tabler/icons-react'
+import { IconActivity, IconClock, IconHash, IconTrendingUp, IconUsers, IconUserPlus } from '@tabler/icons-react'
 import { MiningStats } from '../types'
 
 interface Props {
@@ -60,6 +60,30 @@ export function StatsPanel({ stats }: Props) {
           <div>
             <Text size="xs" c="dimmed">Avg Solve Time</Text>
             <Text fw={500}>{(stats.averageSolveTime / 1000).toFixed(2)}s</Text>
+          </div>
+        </Group>
+      </Paper>
+
+      <Paper withBorder p="xs">
+        <Group gap="xs">
+          <ThemeIcon size="sm" variant="light" color="cyan">
+            <IconUsers size={16} />
+          </ThemeIcon>
+          <div>
+            <Text size="xs" c="dimmed">Live Connections</Text>
+            <Text fw={500}>{stats.liveConnections || 0}</Text>
+          </div>
+        </Group>
+      </Paper>
+
+      <Paper withBorder p="xs">
+        <Group gap="xs">
+          <ThemeIcon size="sm" variant="light" color="indigo">
+            <IconUserPlus size={16} />
+          </ThemeIcon>
+          <div>
+            <Text size="xs" c="dimmed">Total Connections</Text>
+            <Text fw={500}>{stats.totalConnections || 0}</Text>
           </div>
         </Group>
       </Paper>

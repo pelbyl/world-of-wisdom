@@ -21,18 +21,19 @@ import (
 )
 
 type WebServer struct {
-	tcpServerAddr string
-	clients       map[*websocket.Conn]bool
-	clientsMux    sync.RWMutex
-	blockchain    []Block
-	challenges    map[string]*Challenge
-	connections   map[string]*ClientConnection
-	stats         *MiningStats
-	mu            sync.RWMutex
-	upgrader      websocket.Upgrader
-	quoteProvider *wisdom.QuoteProvider
-	miningActive  bool
-	stopMining    chan bool
+	tcpServerAddr     string
+	clients           map[*websocket.Conn]bool
+	clientsMux        sync.RWMutex
+	blockchain        []Block
+	challenges        map[string]*Challenge
+	connections       map[string]*ClientConnection
+	stats             *MiningStats
+	mu                sync.RWMutex
+	upgrader          websocket.Upgrader
+	quoteProvider     *wisdom.QuoteProvider
+	miningActive      bool
+	stopMining        chan bool
+	totalConnections  int
 }
 
 type Challenge struct {
@@ -69,6 +70,8 @@ type MiningStats struct {
 	AverageSolveTime    float64 `json:"averageSolveTime"`
 	CurrentDifficulty   int     `json:"currentDifficulty"`
 	HashRate            float64 `json:"hashRate"`
+	LiveConnections     int     `json:"liveConnections,omitempty"`
+	TotalConnections    int     `json:"totalConnections,omitempty"`
 }
 
 type ClientConnection struct {
@@ -120,9 +123,10 @@ func NewWebServer(tcpServerAddr string) *WebServer {
 				return true
 			},
 		},
-		quoteProvider: wisdom.NewQuoteProvider(),
-		miningActive:  false,
-		stopMining:    make(chan bool, 10),
+		quoteProvider:    wisdom.NewQuoteProvider(),
+		miningActive:     false,
+		stopMining:       make(chan bool, 10),
+		totalConnections: 0,
 	}
 }
 
@@ -182,10 +186,11 @@ func (ws *WebServer) sendInitialData(conn *websocket.Conn) {
 	ws.mu.RUnlock()
 
 	msg := WebSocketMessage{
-		Type:        "init",
-		Blocks:      ws.blockchain,
-		Connections: connections,
-		Stats:       &statsCopy,
+		Type:         "init",
+		Blocks:       ws.blockchain,
+		Connections:  connections,
+		Stats:        &statsCopy,
+		MiningActive: ws.miningActive,
 	}
 
 	// Sanitize before sending
@@ -350,6 +355,7 @@ func (ws *WebServer) simulateClient() {
 
 	ws.mu.Lock()
 	ws.connections[clientID] = connection
+	ws.totalConnections++
 	ws.mu.Unlock()
 
 	ws.broadcast(WebSocketMessage{
@@ -478,9 +484,16 @@ func (ws *WebServer) simulateClient() {
 		Connection: connection,
 	})
 
+	// Update live connection counts in stats
+	ws.mu.Lock()
+	ws.stats.LiveConnections = len(ws.connections)
+	ws.stats.TotalConnections = ws.totalConnections
+	statsCopy := *ws.stats
+	ws.mu.Unlock()
+	
 	ws.broadcast(WebSocketMessage{
 		Type:  "stats",
-		Stats: ws.stats,
+		Stats: &statsCopy,
 	})
 }
 
