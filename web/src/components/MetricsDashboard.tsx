@@ -77,6 +77,14 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
     connections: m.connectionsTotal
   }))
 
+  // Format average solve time: show in seconds if > 1000ms, otherwise milliseconds
+  const formatSolveTime = (timeMs: number) => {
+    if (timeMs > 1000) {
+      return `${(timeMs / 1000).toFixed(2)}s`
+    }
+    return `${timeMs.toFixed(1)}ms`
+  }
+
   const difficultyColor = metrics.currentDifficulty >= 4 ? 'red' : metrics.currentDifficulty >= 3 ? 'orange' : 'green'
 
   return (
@@ -169,7 +177,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                     Avg Solve Time
                   </Text>
                   <Text fw={700} size="xl">
-                    {metrics.averageSolveTime.toFixed(1)}ms
+                    {formatSolveTime(metrics.averageSolveTime)}
                   </Text>
                 </div>
                 <ThemeIcon color="teal" variant="light" size={38} radius="md">
