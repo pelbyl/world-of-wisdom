@@ -13,6 +13,9 @@ export function StatsPanel({ stats }: Props) {
 
   return (
     <Stack gap="md">
+      <Text size="xs" c="dimmed">
+        Live simulation statistics from the WebSocket server
+      </Text>
       <Group justify="space-between">
         <div>
           <Text size="xs" c="dimmed">Success Rate</Text>
