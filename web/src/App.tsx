@@ -22,48 +22,64 @@ function App() {
     hashRate: 0,
   })
   const [metrics, setMetrics] = useState<MetricsData | null>(null)
+  const [miningActive, setMiningActive] = useState(false)
 
-  const { sendMessage, lastMessage, readyState } = useWebSocket(`ws://${window.location.host}/ws`)
+  const { sendMessage, lastMessage, readyState } = useWebSocket('ws://localhost:8081/ws')
 
   useEffect(() => {
     if (lastMessage) {
-      const data = JSON.parse(lastMessage.data)
-      
-      switch (data.type) {
-        case 'block':
-          setBlocks(prev => [...prev, data.block])
-          break
-        case 'challenge':
-          setCurrentChallenges(prev => [...prev, data.challenge])
-          break
-        case 'challenge_update':
-          setCurrentChallenges(prev => 
-            prev.map(c => c.id === data.challenge.id ? data.challenge : c)
-          )
-          break
-        case 'connection':
-          setConnections(prev => {
-            const existing = prev.find(c => c.id === data.connection.id)
-            if (existing) {
-              return prev.map(c => c.id === data.connection.id ? data.connection : c)
-            }
-            return [...prev, data.connection]
-          })
-          break
-        case 'stats':
-          setStats(data.stats)
-          break
-        case 'metrics':
-          setMetrics(data.metrics)
-          break
-        case 'init':
-          setBlocks(data.blocks || [])
-          setConnections(data.connections || [])
-          setStats(data.stats || stats)
-          break
+      try {
+        const data = JSON.parse(lastMessage.data)
+        
+        switch (data.type) {
+          case 'block':
+            setBlocks(prev => [...prev, data.block])
+            break
+          case 'challenge':
+            setCurrentChallenges(prev => [...prev, data.challenge])
+            break
+          case 'challenge_update':
+            setCurrentChallenges(prev => 
+              prev.map(c => c.id === data.challenge.id ? data.challenge : c)
+            )
+            break
+          case 'connection':
+            setConnections(prev => {
+              const existing = prev.find(c => c.id === data.connection.id)
+              if (existing) {
+                return prev.map(c => c.id === data.connection.id ? data.connection : c)
+              }
+              return [...prev, data.connection]
+            })
+            break
+          case 'stats':
+            setStats(data.stats)
+            break
+          case 'metrics':
+            setMetrics(data.metrics)
+            break
+          case 'mining_status':
+            setMiningActive(data.miningActive || false)
+            break
+          case 'init':
+            setBlocks(data.blocks || [])
+            setConnections(data.connections || [])
+            setStats(data.stats || stats)
+            break
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error)
       }
     }
   }, [lastMessage])
+
+  const handleStartMining = () => {
+    sendMessage(JSON.stringify({ type: 'start_mining' }))
+  }
+
+  const handleStopMining = () => {
+    sendMessage(JSON.stringify({ type: 'stop_mining' }))
+  }
 
   return (
     <MantineProvider defaultColorScheme="dark">
@@ -121,10 +137,13 @@ function App() {
 
             <Grid.Col span={12}>
               <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">Challenge Monitor</Title>
+                <Title order={3} mb="md">Mining Simulation</Title>
                 <ChallengePanel 
                   challenges={currentChallenges} 
                   onSimulateClient={() => sendMessage(JSON.stringify({ type: 'simulate_client' }))}
+                  onStartMining={handleStartMining}
+                  onStopMining={handleStopMining}
+                  miningActive={miningActive}
                 />
               </Paper>
             </Grid.Col>
