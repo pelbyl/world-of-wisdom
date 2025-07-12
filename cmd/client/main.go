@@ -1,37 +1,34 @@
 package main
 
 import (
-	"bufio"
+	"flag"
 	"fmt"
 	"log"
-	"net"
-	"os"
-)
+	"time"
 
-const (
-	defaultServer = "localhost:8080"
+	"world-of-wisdom/internal/client"
 )
 
 func main() {
-	server := defaultServer
-	if len(os.Args) > 1 {
-		server = os.Args[1]
-	}
+	var (
+		server   = flag.String("server", "localhost:8080", "Server address")
+		attempts = flag.Int("attempts", 1, "Number of quote requests")
+		timeout  = flag.Duration("timeout", 30*time.Second, "Request timeout")
+	)
+	flag.Parse()
 
-	conn, err := net.Dial("tcp", server)
-	if err != nil {
-		log.Fatalf("Failed to connect to server %s: %v", server, err)
-	}
-	defer conn.Close()
+	c := client.NewClient(*server, *timeout)
 
-	log.Printf("Connected to server %s", server)
+	log.Printf("Connecting to server %s, requesting %d quote(s)", *server, *attempts)
 
-	scanner := bufio.NewScanner(conn)
-	if scanner.Scan() {
-		fmt.Println("Server response:", scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading from server: %v", err)
+	if *attempts == 1 {
+		quote, err := c.RequestQuote()
+		if err != nil {
+			log.Fatalf("Failed to get quote: %v", err)
+		}
+		fmt.Printf("\nWord of Wisdom: %s\n", quote)
+	} else {
+		quotes := c.RequestMultipleQuotes(*attempts)
+		fmt.Printf("\nReceived %d quotes from the Word of Wisdom server\n", len(quotes))
 	}
 }
