@@ -186,21 +186,21 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
 
       {/* Charts */}
       <Grid>
-        <Grid.Col span={{ base: 12, md: 6 }}>
+        <Grid.Col span={{ base: 12, md: 4 }}>
           <Paper p="md" withBorder>
-            <Title order={4} mb="md">Difficulty & Solve Time Trend</Title>
+            <Title order={4} mb="md">Difficulty Trend</Title>
             {metricsHistory.length > 1 ? (
               <LineChart
                 h={200}
                 data={lineChartData}
                 dataKey="time"
                 series={[
-                  { name: 'difficulty', color: 'blue.6', label: 'Difficulty' },
-                  { name: 'solveTime', color: 'red.6', label: 'Solve Time (ms)' }
+                  { name: 'difficulty', color: 'blue.6', label: 'Difficulty Level' }
                 ]}
                 curveType="linear"
                 withLegend
                 withDots={false}
+                yAxisProps={{ domain: [1, 8] }}
               />
             ) : (
               <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
@@ -208,7 +208,29 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
           </Paper>
         </Grid.Col>
 
-        <Grid.Col span={{ base: 12, md: 6 }}>
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <Paper p="md" withBorder>
+            <Title order={4} mb="md">Solve Time Trend</Title>
+            {metricsHistory.length > 1 ? (
+              <LineChart
+                h={200}
+                data={lineChartData}
+                dataKey="time"
+                series={[
+                  { name: 'solveTime', color: 'red.6', label: 'Solve Time (ms)' }
+                ]}
+                curveType="linear"
+                withLegend
+                withDots={false}
+                yAxisProps={{ domain: ['dataMin', 'dataMax'] }}
+              />
+            ) : (
+              <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
+            )}
+          </Paper>
+        </Grid.Col>
+
+        <Grid.Col span={{ base: 12, md: 4 }}>
           <Paper p="md" withBorder>
             <Title order={4} mb="md">Connection Activity</Title>
             {metricsHistory.length > 1 ? (

@@ -1029,14 +1029,16 @@ func (ws *WebServer) simulateRealisticMiner() {
 		ws.mu.RUnlock()
 
 		// Generate challenge with adaptive difficulty based on network intensity
-		ws.mu.RLock()
+		ws.mu.Lock()
 		currentDifficulty := ws.stats.CurrentDifficulty
 		// Scale difficulty based on network intensity (default max difficulty 6)
 		maxDifficulty := 6
 		if ws.miningIntensity >= 3 && maxDifficulty > currentDifficulty {
 			currentDifficulty = min(maxDifficulty, currentDifficulty+1)
+			ws.stats.CurrentDifficulty = currentDifficulty // Update stats
+			log.Printf("🔧 Difficulty adjusted to %d (intensity %d)", currentDifficulty, ws.miningIntensity)
 		}
-		ws.mu.RUnlock()
+		ws.mu.Unlock()
 		
 		challenge, err := pow.GenerateChallenge(currentDifficulty)
 		if err != nil {
