@@ -154,7 +154,7 @@ function App() {
               <Stack gap="md">
                 <Paper shadow="xs" p="md" withBorder>
                   <Title order={3} mb="md">Network Stats</Title>
-                  <StatsPanel stats={stats} />
+                  <StatsPanel stats={stats} metrics={metrics} />
                 </Paper>
 
                 <Paper shadow="xs" p="md" withBorder>
