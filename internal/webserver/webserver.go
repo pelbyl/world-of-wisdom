@@ -5,9 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,6 +76,18 @@ type ClientConnection struct {
 	ChallengesCompleted int    `json:"challengesCompleted"`
 }
 
+type MetricsData struct {
+	Timestamp             int64   `json:"timestamp"`
+	ConnectionsTotal      float64 `json:"connectionsTotal"`
+	CurrentDifficulty     float64 `json:"currentDifficulty"`
+	PuzzlesSolvedTotal    float64 `json:"puzzlesSolvedTotal"`
+	PuzzlesFailedTotal    float64 `json:"puzzlesFailedTotal"`
+	AverageSolveTime      float64 `json:"averageSolveTime"`
+	ConnectionRate        float64 `json:"connectionRate"`
+	DifficultyAdjustments float64 `json:"difficultyAdjustments"`
+	ActiveConnections     float64 `json:"activeConnections"`
+}
+
 type WebSocketMessage struct {
 	Type       string      `json:"type"`
 	Block      *Block      `json:"block,omitempty"`
@@ -81,6 +96,7 @@ type WebSocketMessage struct {
 	Stats      *MiningStats `json:"stats,omitempty"`
 	Blocks     []Block     `json:"blocks,omitempty"`
 	Connections []ClientConnection `json:"connections,omitempty"`
+	Metrics    *MetricsData `json:"metrics,omitempty"`
 }
 
 func NewWebServer(tcpServerAddr string) *WebServer {
@@ -310,8 +326,97 @@ func (ws *WebServer) HandleSimulateClient(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 }
 
+func (ws *WebServer) fetchPrometheusMetrics() (*MetricsData, error) {
+	resp, err := http.Get("http://server:2112/metrics")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := &MetricsData{
+		Timestamp: time.Now().UnixMilli(),
+	}
+
+	lines := strings.Split(string(body), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "wisdom_connections_total") && strings.Contains(line, `status="accepted"`) {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.ConnectionsTotal = value
+			}
+		} else if strings.HasPrefix(line, "wisdom_current_difficulty") && !strings.HasPrefix(line, "#") {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.CurrentDifficulty = value
+			}
+		} else if strings.HasPrefix(line, "wisdom_puzzles_solved_total") && !strings.Contains(line, "#") {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.PuzzlesSolvedTotal += value
+			}
+		} else if strings.HasPrefix(line, "wisdom_puzzles_failed_total") && !strings.Contains(line, "#") {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.PuzzlesFailedTotal += value
+			}
+		} else if strings.HasPrefix(line, "wisdom_average_solve_time_seconds") && !strings.HasPrefix(line, "#") {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.AverageSolveTime = value * 1000 // Convert to ms
+			}
+		} else if strings.HasPrefix(line, "wisdom_connection_rate_per_minute") && !strings.HasPrefix(line, "#") {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.ConnectionRate = value
+			}
+		} else if strings.HasPrefix(line, "wisdom_difficulty_adjustments_total") && !strings.Contains(line, "#") {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.DifficultyAdjustments += value
+			}
+		} else if strings.HasPrefix(line, "wisdom_active_connections") && !strings.HasPrefix(line, "#") {
+			if value := extractMetricValue(line); value != -1 {
+				metrics.ActiveConnections = value
+			}
+		}
+	}
+
+	return metrics, nil
+}
+
+func extractMetricValue(line string) float64 {
+	parts := strings.Fields(line)
+	if len(parts) < 2 {
+		return -1
+	}
+	
+	value, err := strconv.ParseFloat(parts[len(parts)-1], 64)
+	if err != nil {
+		return -1
+	}
+	
+	return value
+}
+
+func (ws *WebServer) startMetricsBroadcast() {
+	ticker := time.NewTicker(2 * time.Second)
+	go func() {
+		for range ticker.C {
+			metrics, err := ws.fetchPrometheusMetrics()
+			if err != nil {
+				log.Printf("Failed to fetch metrics: %v", err)
+				continue
+			}
+
+			ws.broadcast(WebSocketMessage{
+				Type:    "metrics",
+				Metrics: metrics,
+			})
+		}
+	}()
+}
+
 func (ws *WebServer) Start() {
 	log.Println("WebServer started")
+	ws.startMetricsBroadcast()
 }
 
 func (ws *WebServer) Stop() {

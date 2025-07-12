@@ -1,4 +1,4 @@
-import { MantineProvider, Container, Title, Grid, Paper, Group, Badge, Text, Stack } from '@mantine/core'
+import { MantineProvider, Container, Title, Grid, Paper, Group, Badge, Stack } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { useEffect, useState } from 'react'
 import { BlockchainVisualizer } from './components/BlockchainVisualizer'
@@ -6,8 +6,9 @@ import { MiningVisualizer } from './components/MiningVisualizer'
 import { ConnectionsPanel } from './components/ConnectionsPanel'
 import { StatsPanel } from './components/StatsPanel'
 import { ChallengePanel } from './components/ChallengePanel'
+import { MetricsDashboard } from './components/MetricsDashboard'
 import { useWebSocket } from './hooks/useWebSocket'
-import { Block, Challenge, ClientConnection, MiningStats } from './types'
+import { Block, Challenge, ClientConnection, MiningStats, MetricsData } from './types'
 
 function App() {
   const [blocks, setBlocks] = useState<Block[]>([])
@@ -20,6 +21,7 @@ function App() {
     currentDifficulty: 2,
     hashRate: 0,
   })
+  const [metrics, setMetrics] = useState<MetricsData | null>(null)
 
   const { sendMessage, lastMessage, readyState } = useWebSocket('ws://localhost:8081/ws')
 
@@ -51,6 +53,9 @@ function App() {
         case 'stats':
           setStats(data.stats)
           break
+        case 'metrics':
+          setMetrics(data.metrics)
+          break
         case 'init':
           setBlocks(data.blocks || [])
           setConnections(data.connections || [])
@@ -77,6 +82,10 @@ function App() {
           </Group>
 
           <Grid>
+            <Grid.Col span={12}>
+              <MetricsDashboard metrics={metrics} />
+            </Grid.Col>
+
             <Grid.Col span={12}>
               <Paper shadow="xs" p="md" withBorder>
                 <Title order={3} mb="md">Blockchain</Title>
