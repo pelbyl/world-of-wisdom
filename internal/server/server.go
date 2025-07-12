@@ -44,6 +44,15 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to listen on %s: %w", cfg.Port, err)
 	}
 
+	// Start metrics server if port specified
+	if cfg.MetricsPort != "" {
+		metrics.StartMetricsServer(cfg.MetricsPort)
+		log.Printf("Metrics server started on %s", cfg.MetricsPort)
+	}
+
+	// Initialize metrics
+	metrics.UpdateCurrentDifficulty(cfg.Difficulty)
+
 	return &Server{
 		listener:       listener,
 		quoteProvider:  wisdom.NewQuoteProvider(),
@@ -85,15 +94,20 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer s.activeConns.Done()
 	defer conn.Close()
 
+	startTime := time.Now()
 	clientAddr := conn.RemoteAddr().String()
 	log.Printf("New connection from %s", clientAddr)
+
+	// Record connection
+	metrics.RecordConnection("accepted")
 
 	conn.SetDeadline(time.Now().Add(s.timeout))
 
 	// Track connection rate for adaptive difficulty
 	s.trackConnection()
 
-	challenge, err := pow.GenerateChallenge(s.getDifficulty())
+	difficulty := s.getDifficulty()
+	challenge, err := pow.GenerateChallenge(difficulty)
 	if err != nil {
 		log.Printf("Failed to generate challenge: %v", err)
 		conn.Write([]byte("Error: Failed to generate challenge\n"))
@@ -119,10 +133,20 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if pow.VerifyPoW(challenge.Seed, response, challenge.Difficulty) {
 		log.Printf("Client %s solved the challenge in %v", clientAddr, solveTime)
 		s.recordSolveTime(solveTime)
+		
+		// Record metrics
+		metrics.RecordPuzzleSolved(difficulty, solveTime)
+		metrics.RecordProcessingTime("success", time.Since(startTime))
+		
 		quote := s.quoteProvider.GetRandomQuote()
 		conn.Write([]byte(quote + "\n"))
 	} else {
 		log.Printf("Client %s failed the challenge", clientAddr)
+		
+		// Record metrics
+		metrics.RecordPuzzleFailed(difficulty)
+		metrics.RecordProcessingTime("failed", time.Since(startTime))
+		
 		conn.Write([]byte("Error: Invalid proof of work\n"))
 	}
 }
@@ -232,8 +256,17 @@ func (s *Server) adjustDifficulty() {
 	}
 	
 	if s.difficulty != oldDifficulty {
+		direction := "increase"
+		if s.difficulty < oldDifficulty {
+			direction = "decrease"
+		}
+		
 		log.Printf("Adaptive difficulty: %d -> %d (avg solve: %v, rate: %.1f/min)", 
 			oldDifficulty, s.difficulty, avgSolveTime, connectionRatePerMinute)
+		
+		// Record metrics
+		metrics.RecordDifficultyAdjustment(direction)
+		metrics.UpdateCurrentDifficulty(s.difficulty)
 	}
 	
 	// Reset tracking

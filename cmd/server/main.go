@@ -13,10 +13,11 @@ import (
 
 func main() {
 	var (
-		port       = flag.String("port", ":8080", "TCP port to listen on")
-		difficulty = flag.Int("difficulty", 2, "Initial difficulty (1-6)")
-		timeout    = flag.Duration("timeout", 30*time.Second, "Client timeout")
-		adaptive   = flag.Bool("adaptive", true, "Enable adaptive difficulty")
+		port        = flag.String("port", ":8080", "TCP port to listen on")
+		difficulty  = flag.Int("difficulty", 2, "Initial difficulty (1-6)")
+		timeout     = flag.Duration("timeout", 30*time.Second, "Client timeout")
+		adaptive    = flag.Bool("adaptive", true, "Enable adaptive difficulty")
+		metricsPort = flag.String("metrics-port", ":2112", "Prometheus metrics port")
 	)
 	flag.Parse()
 
@@ -25,6 +26,7 @@ func main() {
 		Difficulty:   *difficulty,
 		Timeout:      *timeout,
 		AdaptiveMode: *adaptive,
+		MetricsPort:  *metricsPort,
 	}
 
 	srv, err := server.NewServer(cfg)
