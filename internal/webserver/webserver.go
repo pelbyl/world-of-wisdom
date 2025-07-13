@@ -610,13 +610,24 @@ func (ws *WebServer) spawnMinersWithConfig(config MiningConfig) {
 		case 3: // High intensity (DDoS protection activates)
 			targetMiners = config.MaxMiners - rand.Intn(5)
 			baseInterval = time.Duration(200+rand.Intn(800)) * time.Millisecond
-		case 4: // EXTREME intensity (stress testing)
-			targetMiners = config.MaxMiners + rand.Intn(config.MaxMiners/4) // Push beyond limits
-			baseInterval = time.Duration(50+rand.Intn(200)) * time.Millisecond // Very fast spawning
+		case 4: // EXTREME intensity (stress testing) - conservative limits
+			// Conservative cap: never exceed 2x CPU cores for stability
+			safetyCap := ws.cpuCores * 2
+			extremeMax := config.MaxMiners + rand.Intn(config.MaxMiners/6) // Reduced from /4 to /6
+			if extremeMax > safetyCap {
+				extremeMax = safetyCap
+			}
+			targetMiners = extremeMax
+			baseInterval = time.Duration(200+rand.Intn(500)) * time.Millisecond // More conservative timing
 		}
 
-		// Ensure within bounds
-		if targetMiners > config.MaxMiners {
+		// Ensure within bounds with conservative global safety cap
+		globalSafetyCap := ws.cpuCores * 3 // Reduced from 4x to 3x CPU cores
+		if targetMiners > globalSafetyCap {
+			targetMiners = globalSafetyCap
+			log.Printf("⚠️ Capping miners at %d (safety limit: %dx CPU cores)", globalSafetyCap, 3)
+		}
+		if targetMiners > config.MaxMiners && ws.miningIntensity < 4 {
 			targetMiners = config.MaxMiners
 		}
 		if targetMiners < config.MinMiners {
@@ -880,16 +891,23 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 		ws.mu.RUnlock()
 
 		// Generate challenge with adaptive difficulty based on configuration
-		ws.mu.RLock()
+		ws.mu.Lock()
 		currentDifficulty := ws.stats.CurrentDifficulty
 		// Scale difficulty based on network intensity and config
 		if ws.miningIntensity >= 3 && config.MaxDifficulty > currentDifficulty {
 			currentDifficulty = min(config.MaxDifficulty, currentDifficulty+1)
+			ws.stats.CurrentDifficulty = currentDifficulty // Update stats
+			log.Printf("🔧 Difficulty adjusted to %d (intensity %d, mode: configured)", currentDifficulty, ws.miningIntensity)
 		}
 		if config.HighPerformance || config.CPUIntensive {
-			currentDifficulty = min(config.MaxDifficulty, currentDifficulty+2) // Higher difficulty for performance modes
+			newDifficulty := min(config.MaxDifficulty, currentDifficulty+2)
+			if newDifficulty != currentDifficulty {
+				ws.stats.CurrentDifficulty = newDifficulty
+				currentDifficulty = newDifficulty
+				log.Printf("🔧 Difficulty boosted to %d (high performance mode)", currentDifficulty)
+			}
 		}
-		ws.mu.RUnlock()
+		ws.mu.Unlock()
 		
 		seed, challengeDifficulty, err := ws.generateChallenge(currentDifficulty)
 		if err != nil {
