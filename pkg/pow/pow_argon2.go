@@ -36,13 +36,13 @@ func GenerateArgon2Challenge(difficulty int) (*Argon2Challenge, error) {
 	// Higher difficulty = more memory and iterations
 	memory := uint32(64 * 1024) // 64 MB base
 	time := uint32(1)           // 1 iteration base
-	
+
 	switch difficulty {
 	case 1:
-		memory = 32 * 1024  // 32 MB
+		memory = 32 * 1024 // 32 MB
 		time = 1
 	case 2:
-		memory = 64 * 1024  // 64 MB
+		memory = 64 * 1024 // 64 MB
 		time = 1
 	case 3:
 		memory = 128 * 1024 // 128 MB
@@ -80,10 +80,10 @@ func VerifyArgon2PoW(challenge *Argon2Challenge, nonce string) bool {
 
 	// Combine seed and nonce
 	data := []byte(challenge.Seed + nonce)
-	
+
 	// Use empty salt for PoW (deterministic)
 	salt := []byte{}
-	
+
 	// Generate Argon2 hash
 	hash := argon2.IDKey(data, salt, challenge.Time, challenge.Memory, challenge.Threads, challenge.KeyLen)
 	hashHex := hex.EncodeToString(hash)
@@ -100,7 +100,7 @@ func SolveArgon2Challenge(challenge *Argon2Challenge) (string, error) {
 		if VerifyArgon2PoW(challenge, nonceStr) {
 			return nonceStr, nil
 		}
-		
+
 		// Increase max attempts for higher difficulties
 		maxAttempts := 1000000 * challenge.Difficulty
 		if nonce > maxAttempts {

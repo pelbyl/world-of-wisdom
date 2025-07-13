@@ -50,11 +50,11 @@ func NewQuoteProvider() *QuoteProvider {
 func (qp *QuoteProvider) GetRandomQuote() string {
 	qp.mu.RLock()
 	defer qp.mu.RUnlock()
-	
+
 	if len(qp.quotes) == 0 {
 		return "No wisdom available at this time."
 	}
-	
+
 	index := qp.rng.Intn(len(qp.quotes))
 	return qp.quotes[index]
 }
@@ -62,13 +62,13 @@ func (qp *QuoteProvider) GetRandomQuote() string {
 func (qp *QuoteProvider) AddQuote(quote string) {
 	qp.mu.Lock()
 	defer qp.mu.Unlock()
-	
+
 	qp.quotes = append(qp.quotes, quote)
 }
 
 func (qp *QuoteProvider) GetQuoteCount() int {
 	qp.mu.RLock()
 	defer qp.mu.RUnlock()
-	
+
 	return len(qp.quotes)
 }

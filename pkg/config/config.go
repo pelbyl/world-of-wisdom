@@ -14,12 +14,12 @@ type Config struct {
 	PostgresPassword string
 	PostgresDB       string
 	PostgresSSLMode  string
-	
+
 	RedisHost     string
 	RedisPort     int
 	RedisPassword string
 	RedisDB       int
-	
+
 	// Server
 	ServerPort    string
 	WebServerPort string
@@ -28,7 +28,7 @@ type Config struct {
 	Difficulty    int
 	AdaptiveMode  bool
 	Timeout       time.Duration
-	
+
 	// Environment
 	Environment string
 	LogLevel    string
@@ -43,12 +43,12 @@ func LoadConfig() *Config {
 		PostgresPassword: getEnvString("POSTGRES_PASSWORD", "wisdom123"),
 		PostgresDB:       getEnvString("POSTGRES_DB", "wisdom"),
 		PostgresSSLMode:  getEnvString("POSTGRES_SSL_MODE", "disable"),
-		
+
 		RedisHost:     getEnvString("REDIS_HOST", "localhost"),
 		RedisPort:     getEnvInt("REDIS_PORT", 6379),
 		RedisPassword: getEnvString("REDIS_PASSWORD", ""),
 		RedisDB:       getEnvInt("REDIS_DB", 0),
-		
+
 		// Server defaults
 		ServerPort:    getEnvString("SERVER_PORT", ":8080"),
 		WebServerPort: getEnvString("WEBSERVER_PORT", ":8081"),
@@ -57,7 +57,7 @@ func LoadConfig() *Config {
 		Difficulty:    getEnvInt("DIFFICULTY", 2),
 		AdaptiveMode:  getEnvBool("ADAPTIVE_MODE", true),
 		Timeout:       getEnvDuration("TIMEOUT", 30*time.Second),
-		
+
 		// Environment
 		Environment: getEnvString("ENV", "development"),
 		LogLevel:    getEnvString("LOG_LEVEL", "info"),

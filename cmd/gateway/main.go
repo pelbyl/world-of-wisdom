@@ -18,11 +18,11 @@ import (
 )
 
 type Gateway struct {
-	registry      *services.HTTPServiceClient
-	healthChecks  map[string]time.Time
-	healthMutex   sync.RWMutex
-	roundRobin    map[services.ServiceType]int
-	rrMutex       sync.RWMutex
+	registry     *services.HTTPServiceClient
+	healthChecks map[string]time.Time
+	healthMutex  sync.RWMutex
+	roundRobin   map[services.ServiceType]int
+	rrMutex      sync.RWMutex
 }
 
 func NewGateway(registryURL string) *Gateway {
@@ -46,7 +46,7 @@ func (g *Gateway) healthCheck(instance *services.ServiceInstance) bool {
 	// Perform health check
 	healthURL := fmt.Sprintf("http://%s:%d/health", instance.Address, instance.Port)
 	client := &http.Client{Timeout: 5 * time.Second}
-	
+
 	resp, err := client.Get(healthURL)
 	if err != nil {
 		log.Printf("Health check failed for %s: %v", instance.ID, err)
@@ -55,7 +55,7 @@ func (g *Gateway) healthCheck(instance *services.ServiceInstance) bool {
 	defer resp.Body.Close()
 
 	healthy := resp.StatusCode == http.StatusOK
-	
+
 	g.healthMutex.Lock()
 	g.healthChecks[instance.ID] = time.Now()
 	g.healthMutex.Unlock()
@@ -114,7 +114,7 @@ func (g *Gateway) proxyRequest(c *gin.Context, serviceType services.ServiceType)
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	
+
 	// Modify the request
 	c.Request.URL.Host = target.Host
 	c.Request.URL.Scheme = target.Scheme
@@ -141,11 +141,11 @@ func main() {
 	defer cancel()
 
 	gatewayInstance := &services.ServiceInstance{
-		ID:       "gateway-1",
-		Type:     services.ServiceTypeLoadBalancer,
-		Address:  "gateway",
-		Port:     8084,
-		Health:   "healthy",
+		ID:      "gateway-1",
+		Type:    services.ServiceTypeLoadBalancer,
+		Address: "gateway",
+		Port:    8084,
+		Health:  "healthy",
 		Metadata: map[string]string{
 			"version": "1.0.0",
 			"role":    "api-gateway",
@@ -188,10 +188,10 @@ func main() {
 		gateway.healthMutex.RUnlock()
 
 		c.JSON(http.StatusOK, gin.H{
-			"healthChecks":     healthCount,
-			"registryURL":      *registryURL,
-			"timestamp":        time.Now().UTC(),
-			"gatewayInstance":  gatewayInstance,
+			"healthChecks":    healthCount,
+			"registryURL":     *registryURL,
+			"timestamp":       time.Now().UTC(),
+			"gatewayInstance": gatewayInstance,
 		})
 	})
 

@@ -33,10 +33,10 @@ func (c *ServiceClient) CallService(ctx context.Context, serviceType ServiceType
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover service %s: %w", serviceType, err)
 	}
-	
+
 	// Build URL
 	url := fmt.Sprintf("http://%s:%d%s", instance.Address, instance.Port, path)
-	
+
 	// Prepare request body
 	var bodyReader io.Reader
 	if body != nil {
@@ -46,17 +46,17 @@ func (c *ServiceClient) CallService(ctx context.Context, serviceType ServiceType
 		}
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
-	
+
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "wisdom-service-client/1.0")
-	
+
 	// Make request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -64,10 +64,10 @@ func (c *ServiceClient) CallService(ctx context.Context, serviceType ServiceType
 		c.registry.UpdateHealth(instance.ID, "unhealthy")
 		return nil, fmt.Errorf("request failed to %s: %w", url, err)
 	}
-	
+
 	// Update service heartbeat on successful request
 	c.registry.Heartbeat(instance.ID)
-	
+
 	return resp, nil
 }
 
@@ -78,41 +78,41 @@ func (c *ServiceClient) CallServiceJSON(ctx context.Context, serviceType Service
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode >= 400 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("service returned error %d: %s", resp.StatusCode, string(bodyBytes))
 	}
-	
+
 	if result != nil {
 		decoder := json.NewDecoder(resp.Body)
 		if err := decoder.Decode(result); err != nil {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
 // HealthCheck performs a health check on a service instance
 func (c *ServiceClient) HealthCheck(ctx context.Context, instance *ServiceInstance) error {
 	url := fmt.Sprintf("http://%s:%d/health", instance.Address, instance.Port)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return err
 	}
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check failed with status %d", resp.StatusCode)
 	}
-	
+
 	return nil
 }
 
@@ -122,18 +122,18 @@ func (c *ServiceClient) Broadcast(ctx context.Context, serviceType ServiceType, 
 	if len(instances) == 0 {
 		return nil, fmt.Errorf("no healthy instances of service type %s", serviceType)
 	}
-	
+
 	results := make([]BroadcastResult, len(instances))
-	
+
 	// Send requests to all instances concurrently
 	done := make(chan int, len(instances))
-	
+
 	for i, instance := range instances {
 		go func(idx int, inst *ServiceInstance) {
 			defer func() { done <- idx }()
-			
+
 			url := fmt.Sprintf("http://%s:%d%s", inst.Address, inst.Port, path)
-			
+
 			var bodyReader io.Reader
 			if body != nil {
 				bodyBytes, err := json.Marshal(body)
@@ -146,7 +146,7 @@ func (c *ServiceClient) Broadcast(ctx context.Context, serviceType ServiceType, 
 				}
 				bodyReader = bytes.NewReader(bodyBytes)
 			}
-			
+
 			req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 			if err != nil {
 				results[idx] = BroadcastResult{
@@ -155,9 +155,9 @@ func (c *ServiceClient) Broadcast(ctx context.Context, serviceType ServiceType, 
 				}
 				return
 			}
-			
+
 			req.Header.Set("Content-Type", "application/json")
-			
+
 			resp, err := c.httpClient.Do(req)
 			if err != nil {
 				results[idx] = BroadcastResult{
@@ -167,7 +167,7 @@ func (c *ServiceClient) Broadcast(ctx context.Context, serviceType ServiceType, 
 				return
 			}
 			defer resp.Body.Close()
-			
+
 			bodyBytes, err := io.ReadAll(resp.Body)
 			if err != nil {
 				results[idx] = BroadcastResult{
@@ -177,7 +177,7 @@ func (c *ServiceClient) Broadcast(ctx context.Context, serviceType ServiceType, 
 				}
 				return
 			}
-			
+
 			results[idx] = BroadcastResult{
 				Instance:   inst,
 				StatusCode: resp.StatusCode,
@@ -185,12 +185,12 @@ func (c *ServiceClient) Broadcast(ctx context.Context, serviceType ServiceType, 
 			}
 		}(i, instance)
 	}
-	
+
 	// Wait for all requests to complete
 	for i := 0; i < len(instances); i++ {
 		<-done
 	}
-	
+
 	return results, nil
 }
 

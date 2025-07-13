@@ -24,7 +24,7 @@ func (s *Server) getLogs(c *gin.Context) {
 	defer cancel()
 
 	limit := getLimit(c, 100)
-	
+
 	logs, err := s.queries.GetRecentLogs(ctx, s.db, int32(limit))
 	if err != nil {
 		s.handleError(c, http.StatusInternalServerError, "Failed to fetch logs", err)
@@ -96,7 +96,7 @@ func (s *Server) getLogsByLevel(c *gin.Context) {
 	}
 
 	limit := getLimit(c, 100)
-	
+
 	logs, err := s.queries.GetLogsByLevel(ctx, s.db, db.GetLogsByLevelParams{
 		Level: level,
 		Limit: int32(limit),
@@ -124,10 +124,10 @@ func (s *Server) createLog(c *gin.Context) {
 	defer cancel()
 
 	var req struct {
-		Timestamp *time.Time           `json:"timestamp"`
-		Level     string              `json:"level" binding:"required,oneof=info success warning error"`
-		Message   string              `json:"message" binding:"required"`
-		Icon      string              `json:"icon,omitempty"`
+		Timestamp *time.Time             `json:"timestamp"`
+		Level     string                 `json:"level" binding:"required,oneof=info success warning error"`
+		Message   string                 `json:"message" binding:"required"`
+		Icon      string                 `json:"icon,omitempty"`
 		Metadata  map[string]interface{} `json:"metadata,omitempty"`
 	}
 

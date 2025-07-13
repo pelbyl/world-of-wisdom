@@ -24,7 +24,7 @@ func (s *Server) getBlocks(c *gin.Context) {
 	defer cancel()
 
 	limit := getLimit(c, 50)
-	
+
 	blocks, err := s.queries.GetRecentBlocks(ctx, s.db, int32(limit))
 	if err != nil {
 		s.handleError(c, http.StatusInternalServerError, "Failed to get blocks", err)

@@ -44,20 +44,20 @@ func (c *Client) RequestQuote() (string, error) {
 	// Determine algorithm based on challenge format
 	var solution string
 	start := time.Now()
-	
+
 	if strings.Contains(challengeStr, "Argon2") {
 		// Parse Argon2 challenge
 		seed, difficulty, err := parseArgon2Challenge(challengeStr)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse Argon2 challenge: %w", err)
 		}
-		
+
 		challenge, err := pow.GenerateArgon2Challenge(difficulty)
 		if err != nil {
 			return "", fmt.Errorf("failed to create Argon2 challenge: %w", err)
 		}
 		challenge.Seed = seed
-		
+
 		solution, err = pow.SolveArgon2Challenge(challenge)
 		if err != nil {
 			return "", fmt.Errorf("failed to solve Argon2 challenge: %w", err)
@@ -68,12 +68,12 @@ func (c *Client) RequestQuote() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to parse challenge: %w", err)
 		}
-		
+
 		challenge := &pow.Challenge{
 			Seed:       seed,
 			Difficulty: difficulty,
 		}
-		
+
 		solution, err = pow.SolveChallenge(challenge)
 		if err != nil {
 			return "", fmt.Errorf("failed to solve challenge: %w", err)
@@ -93,7 +93,7 @@ func (c *Client) RequestQuote() (string, error) {
 	}
 
 	response := scanner.Text()
-	
+
 	if strings.HasPrefix(response, "Error:") {
 		return "", fmt.Errorf("server error: %s", response)
 	}
@@ -104,37 +104,37 @@ func (c *Client) RequestQuote() (string, error) {
 func parseChallenge(challenge string) (seed string, difficulty int, err error) {
 	re := regexp.MustCompile(`Solve PoW: ([a-f0-9]+) with prefix (0+)`)
 	matches := re.FindStringSubmatch(challenge)
-	
+
 	if len(matches) != 3 {
 		return "", 0, fmt.Errorf("invalid challenge format")
 	}
-	
+
 	seed = matches[1]
 	difficulty = len(matches[2])
-	
+
 	return seed, difficulty, nil
 }
 
 func parseArgon2Challenge(challenge string) (seed string, difficulty int, err error) {
 	re := regexp.MustCompile(`Solve Argon2 PoW: ([a-f0-9]+) with (\d+) leading zeros`)
 	matches := re.FindStringSubmatch(challenge)
-	
+
 	if len(matches) != 3 {
 		return "", 0, fmt.Errorf("invalid Argon2 challenge format")
 	}
-	
+
 	seed = matches[1]
 	_, err = fmt.Sscanf(matches[2], "%d", &difficulty)
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to parse difficulty: %w", err)
 	}
-	
+
 	return seed, difficulty, nil
 }
 
 func (c *Client) RequestMultipleQuotes(count int) []string {
 	quotes := make([]string, 0, count)
-	
+
 	for i := 0; i < count; i++ {
 		quote, err := c.RequestQuote()
 		if err != nil {
@@ -143,11 +143,11 @@ func (c *Client) RequestMultipleQuotes(count int) []string {
 		}
 		quotes = append(quotes, quote)
 		log.Printf("Quote %d/%d: %s", i+1, count, quote)
-		
+
 		if i < count-1 {
 			time.Sleep(time.Second)
 		}
 	}
-	
+
 	return quotes
 }

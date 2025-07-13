@@ -11,11 +11,11 @@ import (
 type ServiceType string
 
 const (
-	ServiceTypeTCPServer     ServiceType = "tcp-server"
-	ServiceTypeWebServer     ServiceType = "web-server" 
-	ServiceTypeAPIServer     ServiceType = "api-server"
-	ServiceTypeLoadBalancer  ServiceType = "load-balancer"
-	ServiceTypeMonitor       ServiceType = "monitor"
+	ServiceTypeTCPServer    ServiceType = "tcp-server"
+	ServiceTypeWebServer    ServiceType = "web-server"
+	ServiceTypeAPIServer    ServiceType = "api-server"
+	ServiceTypeLoadBalancer ServiceType = "load-balancer"
+	ServiceTypeMonitor      ServiceType = "monitor"
 )
 
 // ServiceInstance represents a running service instance
@@ -48,10 +48,10 @@ func NewServiceRegistry() *ServiceRegistry {
 		services:  make(map[string]*ServiceInstance),
 		listeners: make(map[ServiceType][]chan ServiceEvent),
 	}
-	
+
 	// Start health check routine
 	go registry.healthCheckRoutine()
-	
+
 	return registry
 }
 
@@ -59,21 +59,21 @@ func NewServiceRegistry() *ServiceRegistry {
 func (r *ServiceRegistry) Register(instance *ServiceInstance) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	instance.LastSeen = time.Now()
 	instance.Health = "healthy"
-	
+
 	r.services[instance.ID] = instance
-	
-	log.Printf("🔗 Service registered: %s (%s) at %s:%d", 
+
+	log.Printf("🔗 Service registered: %s (%s) at %s:%d",
 		instance.ID, instance.Type, instance.Address, instance.Port)
-	
+
 	// Notify listeners
 	r.notifyListeners(instance.Type, ServiceEvent{
 		Type:     "registered",
 		Instance: instance,
 	})
-	
+
 	return nil
 }
 
@@ -81,19 +81,19 @@ func (r *ServiceRegistry) Register(instance *ServiceInstance) error {
 func (r *ServiceRegistry) Deregister(serviceID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if instance, exists := r.services[serviceID]; exists {
 		delete(r.services, serviceID)
-		
+
 		log.Printf("🔗 Service deregistered: %s (%s)", serviceID, instance.Type)
-		
+
 		// Notify listeners
 		r.notifyListeners(instance.Type, ServiceEvent{
-			Type:     "deregistered", 
+			Type:     "deregistered",
 			Instance: instance,
 		})
 	}
-	
+
 	return nil
 }
 
@@ -101,14 +101,14 @@ func (r *ServiceRegistry) Deregister(serviceID string) error {
 func (r *ServiceRegistry) Discover(serviceType ServiceType) []*ServiceInstance {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	var instances []*ServiceInstance
 	for _, instance := range r.services {
 		if instance.Type == serviceType && instance.Health == "healthy" {
 			instances = append(instances, instance)
 		}
 	}
-	
+
 	return instances
 }
 
@@ -116,7 +116,7 @@ func (r *ServiceRegistry) Discover(serviceType ServiceType) []*ServiceInstance {
 func (r *ServiceRegistry) GetService(serviceID string) (*ServiceInstance, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	instance, exists := r.services[serviceID]
 	return instance, exists
 }
@@ -125,13 +125,13 @@ func (r *ServiceRegistry) GetService(serviceID string) (*ServiceInstance, bool) 
 func (r *ServiceRegistry) ListAll() map[string]*ServiceInstance {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	// Return a copy to avoid concurrent map access
 	result := make(map[string]*ServiceInstance)
 	for id, instance := range r.services {
 		result[id] = instance
 	}
-	
+
 	return result
 }
 
@@ -139,10 +139,10 @@ func (r *ServiceRegistry) ListAll() map[string]*ServiceInstance {
 func (r *ServiceRegistry) Subscribe(serviceType ServiceType) <-chan ServiceEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	eventChan := make(chan ServiceEvent, 10)
 	r.listeners[serviceType] = append(r.listeners[serviceType], eventChan)
-	
+
 	return eventChan
 }
 
@@ -150,26 +150,26 @@ func (r *ServiceRegistry) Subscribe(serviceType ServiceType) <-chan ServiceEvent
 func (r *ServiceRegistry) UpdateHealth(serviceID, health string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if instance, exists := r.services[serviceID]; exists {
 		oldHealth := instance.Health
 		instance.Health = health
 		instance.LastSeen = time.Now()
-		
+
 		if oldHealth != health {
-			log.Printf("🏥 Service health changed: %s (%s) %s -> %s", 
+			log.Printf("🏥 Service health changed: %s (%s) %s -> %s",
 				serviceID, instance.Type, oldHealth, health)
-			
+
 			// Notify listeners
 			r.notifyListeners(instance.Type, ServiceEvent{
 				Type:     "health_changed",
 				Instance: instance,
 			})
 		}
-		
+
 		return nil
 	}
-	
+
 	return fmt.Errorf("service %s not found", serviceID)
 }
 
@@ -177,12 +177,12 @@ func (r *ServiceRegistry) UpdateHealth(serviceID, health string) error {
 func (r *ServiceRegistry) Heartbeat(serviceID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if instance, exists := r.services[serviceID]; exists {
 		instance.LastSeen = time.Now()
 		return nil
 	}
-	
+
 	return fmt.Errorf("service %s not found", serviceID)
 }
 
@@ -203,7 +203,7 @@ func (r *ServiceRegistry) notifyListeners(serviceType ServiceType, event Service
 func (r *ServiceRegistry) healthCheckRoutine() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for range ticker.C {
 		r.performHealthChecks()
 	}
@@ -213,17 +213,17 @@ func (r *ServiceRegistry) healthCheckRoutine() {
 func (r *ServiceRegistry) performHealthChecks() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	now := time.Now()
 	staleThreshold := 2 * time.Minute
-	
+
 	for serviceID, instance := range r.services {
 		if now.Sub(instance.LastSeen) > staleThreshold && instance.Health == "healthy" {
 			instance.Health = "unhealthy"
-			
-			log.Printf("🏥 Service marked unhealthy due to stale heartbeat: %s (%s)", 
+
+			log.Printf("🏥 Service marked unhealthy due to stale heartbeat: %s (%s)",
 				serviceID, instance.Type)
-			
+
 			// Notify listeners
 			r.notifyListeners(instance.Type, ServiceEvent{
 				Type:     "health_changed",
@@ -239,7 +239,7 @@ func (r *ServiceRegistry) GetHealthyInstance(serviceType ServiceType) (*ServiceI
 	if len(instances) == 0 {
 		return nil, fmt.Errorf("no healthy instances of service type %s", serviceType)
 	}
-	
+
 	// Simple round-robin for now
 	return instances[0], nil
 }

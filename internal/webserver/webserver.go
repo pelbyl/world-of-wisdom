@@ -41,44 +41,44 @@ func min(a, b int) int {
 }
 
 type WebServer struct {
-	tcpServerAddr     string
-	clients           map[*websocket.Conn]bool
-	clientsMux        sync.RWMutex
-	blockchain        []Block
-	challenges        map[string]*Challenge
-	connections       map[string]*ClientConnection
-	recentLogs        []LogMessage  // Store recent logs for stateless operation
-	stats             *MiningStats
-	mu                sync.RWMutex
-	upgrader          websocket.Upgrader
-	quoteProvider     *wisdom.QuoteProvider
-	miningActive      bool
-	stopMining        chan bool
-	totalConnections  int
-	miningIntensity   int  // 1=low, 2=medium, 3=high, 4=extreme intensity
-	activeMinerCount  int  // concurrent miners
-	cpuCores          int  // available CPU cores
-	maxConcurrency    int  // resource-based max miners
-	dataDir           string // directory for persistent storage
-	algorithm         string // "sha256" or "argon2"
-	db                *pgxpool.Pool // Database connection pool
-	queries           *db.Queries   // SQLC generated queries
-	
+	tcpServerAddr    string
+	clients          map[*websocket.Conn]bool
+	clientsMux       sync.RWMutex
+	blockchain       []Block
+	challenges       map[string]*Challenge
+	connections      map[string]*ClientConnection
+	recentLogs       []LogMessage // Store recent logs for stateless operation
+	stats            *MiningStats
+	mu               sync.RWMutex
+	upgrader         websocket.Upgrader
+	quoteProvider    *wisdom.QuoteProvider
+	miningActive     bool
+	stopMining       chan bool
+	totalConnections int
+	miningIntensity  int           // 1=low, 2=medium, 3=high, 4=extreme intensity
+	activeMinerCount int           // concurrent miners
+	cpuCores         int           // available CPU cores
+	maxConcurrency   int           // resource-based max miners
+	dataDir          string        // directory for persistent storage
+	algorithm        string        // "sha256" or "argon2"
+	db               *pgxpool.Pool // Database connection pool
+	queries          *db.Queries   // SQLC generated queries
+
 	// WebSocket load management
-	messageQueue      chan WebSocketMessage
-	isHighLoad        bool
-	lastBroadcast     time.Time
-	broadcastMux      sync.Mutex
-	batchedMessages   []WebSocketMessage
+	messageQueue    chan WebSocketMessage
+	isHighLoad      bool
+	lastBroadcast   time.Time
+	broadcastMux    sync.Mutex
+	batchedMessages []WebSocketMessage
 }
 
 type Challenge struct {
-	ID        string    `json:"id"`
-	Seed      string    `json:"seed"`
-	Difficulty int      `json:"difficulty"`
-	Timestamp int64     `json:"timestamp"`
-	ClientID  string    `json:"clientId"`
-	Status    string    `json:"status"`
+	ID         string `json:"id"`
+	Seed       string `json:"seed"`
+	Difficulty int    `json:"difficulty"`
+	Timestamp  int64  `json:"timestamp"`
+	ClientID   string `json:"clientId"`
+	Status     string `json:"status"`
 }
 
 type Solution struct {
@@ -134,18 +134,18 @@ type MetricsData struct {
 }
 
 type WebSocketMessage struct {
-	Type         string      `json:"type"`
-	Block        *Block      `json:"block,omitempty"`
-	Challenge    *Challenge  `json:"challenge,omitempty"`
-	Connection   *ClientConnection `json:"connection,omitempty"`
-	Stats        *MiningStats `json:"stats,omitempty"`
-	Blocks       []Block     `json:"blocks,omitempty"`
+	Type         string             `json:"type"`
+	Block        *Block             `json:"block,omitempty"`
+	Challenge    *Challenge         `json:"challenge,omitempty"`
+	Connection   *ClientConnection  `json:"connection,omitempty"`
+	Stats        *MiningStats       `json:"stats,omitempty"`
+	Blocks       []Block            `json:"blocks,omitempty"`
 	Connections  []ClientConnection `json:"connections,omitempty"`
-	Challenges   []Challenge `json:"challenges,omitempty"`
-	Logs         []LogMessage `json:"logs,omitempty"`
-	Metrics      *MetricsData `json:"metrics,omitempty"`
-	MiningActive bool        `json:"miningActive,omitempty"`
-	Log          *LogMessage `json:"log,omitempty"`
+	Challenges   []Challenge        `json:"challenges,omitempty"`
+	Logs         []LogMessage       `json:"logs,omitempty"`
+	Metrics      *MetricsData       `json:"metrics,omitempty"`
+	MiningActive bool               `json:"miningActive,omitempty"`
+	Log          *LogMessage        `json:"log,omitempty"`
 }
 
 type LogMessage struct {
@@ -166,14 +166,14 @@ type PersistentData struct {
 func NewWebServer(tcpServerAddr string, algorithm string, dbpool *pgxpool.Pool, queries *db.Queries) *WebServer {
 	cpuCores := runtime.NumCPU()
 	maxConcurrency := cpuCores * 10 // 10 miners per CPU core
-	
+
 	log.Printf("🖥️  Detected %d CPU cores, max concurrency: %d miners", cpuCores, maxConcurrency)
-	
+
 	// Default to argon2 if not specified
 	if algorithm == "" {
 		algorithm = "argon2"
 	}
-	
+
 	ws := &WebServer{
 		tcpServerAddr: tcpServerAddr,
 		clients:       make(map[*websocket.Conn]bool),
@@ -186,7 +186,7 @@ func NewWebServer(tcpServerAddr string, algorithm string, dbpool *pgxpool.Pool, 
 			AverageSolveTime:  0,
 			HashRate:          0,
 		},
-		dataDir:        "/tmp/wisdom-data",
+		dataDir: "/tmp/wisdom-data",
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -203,21 +203,21 @@ func NewWebServer(tcpServerAddr string, algorithm string, dbpool *pgxpool.Pool, 
 		algorithm:        algorithm,
 		db:               dbpool,
 		queries:          queries,
-		
+
 		// WebSocket load management
 		messageQueue:    make(chan WebSocketMessage, 1000),
 		isHighLoad:      false,
 		lastBroadcast:   time.Now(),
 		batchedMessages: make([]WebSocketMessage, 0, 50),
 	}
-	
+
 	// Create data directory and load persistent data
 	os.MkdirAll(ws.dataDir, 0755)
 	ws.loadData()
-	
+
 	// Start WebSocket message processing goroutine
 	go ws.startMessageProcessor()
-	
+
 	return ws
 }
 
@@ -229,16 +229,16 @@ func (ws *WebServer) loadData() {
 		log.Printf("📂 No existing data found, starting fresh")
 		return
 	}
-	
+
 	var persistentData PersistentData
 	if err := json.Unmarshal(data, &persistentData); err != nil {
 		log.Printf("❌ Failed to load data: %v", err)
 		return
 	}
-	
+
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
-	
+
 	ws.blockchain = persistentData.Blockchain
 	if persistentData.Stats != nil {
 		ws.stats = persistentData.Stats
@@ -247,7 +247,7 @@ func (ws *WebServer) loadData() {
 	if persistentData.Connections != nil {
 		ws.connections = persistentData.Connections
 	}
-	
+
 	log.Printf("📂 Loaded %d blocks and %d connections from storage", len(ws.blockchain), len(ws.connections))
 }
 
@@ -262,13 +262,13 @@ func (ws *WebServer) saveData() {
 		Connections:      ws.connections,
 	}
 	ws.mu.RUnlock()
-	
+
 	data, err := json.MarshalIndent(persistentData, "", "  ")
 	if err != nil {
 		log.Printf("❌ Failed to serialize data: %v", err)
 		return
 	}
-	
+
 	filePath := ws.dataDir + "/blockchain.json"
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		log.Printf("❌ Failed to save data: %v", err)
@@ -298,7 +298,7 @@ func (ws *WebServer) broadcastLog(level, message, icon string) {
 	if ws.db != nil && ws.queries != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		timestamp := time.UnixMilli(logMsg.Timestamp)
 		_, err := ws.queries.CreateLog(ctx, ws.db, db.CreateLogParams{
 			Column1:  timestamp,
@@ -307,12 +307,12 @@ func (ws *WebServer) broadcastLog(level, message, icon string) {
 			Icon:     pgtype.Text{String: icon, Valid: icon != ""},
 			Metadata: nil,
 		})
-		
+
 		if err != nil {
 			log.Printf("❌ Failed to store log in database: %v", err)
 		}
 	}
-	
+
 	ws.broadcast(WebSocketMessage{
 		Type: "log",
 		Log:  logMsg,
@@ -377,12 +377,12 @@ func (ws *WebServer) sendInitialData(conn *websocket.Conn) {
 	for _, c := range ws.connections {
 		connections = append(connections, *c)
 	}
-	
+
 	challenges := make([]Challenge, 0, len(ws.challenges))
 	for _, c := range ws.challenges {
 		challenges = append(challenges, *c)
 	}
-	
+
 	// Create copies to avoid modifying the original
 	statsCopy := *ws.stats
 	logsCopy := make([]LogMessage, len(ws.recentLogs))
@@ -445,7 +445,7 @@ func (ws *WebServer) broadcast(msg WebSocketMessage) {
 	if msg.Stats != nil {
 		sanitizeStats(msg.Stats)
 	}
-	
+
 	// During high load, queue messages instead of immediate broadcast
 	ws.broadcastMux.Lock()
 	if ws.isHighLoad || len(ws.messageQueue) > 500 {
@@ -463,7 +463,7 @@ func (ws *WebServer) broadcast(msg WebSocketMessage) {
 		return
 	}
 	ws.broadcastMux.Unlock()
-	
+
 	// Normal immediate broadcast for low load
 	ws.immediateBroadcast(msg)
 }
@@ -494,20 +494,20 @@ func (ws *WebServer) immediateBroadcast(msg WebSocketMessage) {
 func (ws *WebServer) startMessageProcessor() {
 	batchTicker := time.NewTicker(250 * time.Millisecond) // Process batches every 250ms
 	loadCheckTicker := time.NewTicker(2 * time.Second)    // Check load every 2 seconds
-	
+
 	defer batchTicker.Stop()
 	defer loadCheckTicker.Stop()
-	
+
 	for {
 		select {
 		case msg := <-ws.messageQueue:
 			ws.broadcastMux.Lock()
 			ws.batchedMessages = append(ws.batchedMessages, msg)
 			ws.broadcastMux.Unlock()
-			
+
 		case <-batchTicker.C:
 			ws.processBatchedMessages()
-			
+
 		case <-loadCheckTicker.C:
 			ws.checkAndUpdateLoadStatus()
 		}
@@ -521,17 +521,17 @@ func (ws *WebServer) processBatchedMessages() {
 		ws.broadcastMux.Unlock()
 		return
 	}
-	
+
 	// Take a copy of batched messages and clear the slice
 	messagesToProcess := make([]WebSocketMessage, len(ws.batchedMessages))
 	copy(messagesToProcess, ws.batchedMessages)
 	ws.batchedMessages = ws.batchedMessages[:0] // Clear slice but keep capacity
 	ws.broadcastMux.Unlock()
-	
+
 	// Group messages by type for efficiency
 	logMessages := []WebSocketMessage{}
 	criticalMessages := []WebSocketMessage{}
-	
+
 	for _, msg := range messagesToProcess {
 		switch msg.Type {
 		case "mining_status", "init", "stats":
@@ -542,12 +542,12 @@ func (ws *WebServer) processBatchedMessages() {
 			criticalMessages = append(criticalMessages, msg)
 		}
 	}
-	
+
 	// Send critical messages immediately
 	for _, msg := range criticalMessages {
 		ws.immediateBroadcast(msg)
 	}
-	
+
 	// Batch log messages if there are many
 	if len(logMessages) > 10 {
 		// Send only the latest 5 log messages to avoid overwhelming
@@ -571,49 +571,49 @@ func (ws *WebServer) checkAndUpdateLoadStatus() {
 	ws.broadcastMux.Lock()
 	queueSize := len(ws.messageQueue)
 	ws.broadcastMux.Unlock()
-	
+
 	ws.mu.RLock()
 	activeMinerCount := ws.activeMinerCount
 	miningIntensity := ws.miningIntensity
 	currentDifficulty := ws.stats.CurrentDifficulty
 	ws.mu.RUnlock()
-	
+
 	// Determine if we're in high load situation
 	wasHighLoad := ws.isHighLoad
 	isCurrentlyHighLoad := queueSize > 100 || activeMinerCount > 15 || miningIntensity >= 3
-	
+
 	if isCurrentlyHighLoad != wasHighLoad {
 		ws.broadcastMux.Lock()
 		ws.isHighLoad = isCurrentlyHighLoad
 		ws.broadcastMux.Unlock()
-		
+
 		if isCurrentlyHighLoad {
-			log.Printf("🔥 High load detected: Queue=%d, Miners=%d, Intensity=%d, Difficulty=%d - Switching to batched mode", 
+			log.Printf("🔥 High load detected: Queue=%d, Miners=%d, Intensity=%d, Difficulty=%d - Switching to batched mode",
 				queueSize, activeMinerCount, miningIntensity, currentDifficulty)
 		} else {
-			log.Printf("✅ Load normalized: Queue=%d, Miners=%d, Intensity=%d, Difficulty=%d - Switching to real-time mode", 
+			log.Printf("✅ Load normalized: Queue=%d, Miners=%d, Intensity=%d, Difficulty=%d - Switching to real-time mode",
 				queueSize, activeMinerCount, miningIntensity, currentDifficulty)
 		}
 	}
-	
+
 	// Additional difficulty-specific monitoring during periods of low activity
 	if !isCurrentlyHighLoad && miningIntensity <= 1 && activeMinerCount < 3 && currentDifficulty > 2 {
-		log.Printf("📉 Low activity detected: Miners=%d, Intensity=%d, Difficulty=%d - Consider reducing difficulty", 
+		log.Printf("📉 Low activity detected: Miners=%d, Intensity=%d, Difficulty=%d - Consider reducing difficulty",
 			activeMinerCount, miningIntensity, currentDifficulty)
 	}
 }
 
 type MiningConfig struct {
-	InitialIntensity    int  `json:"initialIntensity"`    // 1-4 (1=low, 2=medium, 3=high, 4=extreme)
-	MaxIntensity        int  `json:"maxIntensity"`        // 1-4
-	IntensityStep       int  `json:"intensityStep"`       // seconds between changes
-	AutoScale          bool `json:"autoScale"`           // enable auto intensity scaling
-	MinMiners          int  `json:"minMiners"`           // minimum concurrent miners
-	MaxMiners          int  `json:"maxMiners"`           // maximum concurrent miners
-	Duration           int  `json:"duration"`            // simulation duration in seconds (0 = infinite)
-	HighPerformance    bool `json:"highPerformance"`     // enable high-performance mode
-	MaxDifficulty      int  `json:"maxDifficulty"`       // maximum PoW difficulty (1-8)
-	CPUIntensive       bool `json:"cpuIntensive"`        // use maximum CPU resources
+	InitialIntensity int  `json:"initialIntensity"` // 1-4 (1=low, 2=medium, 3=high, 4=extreme)
+	MaxIntensity     int  `json:"maxIntensity"`     // 1-4
+	IntensityStep    int  `json:"intensityStep"`    // seconds between changes
+	AutoScale        bool `json:"autoScale"`        // enable auto intensity scaling
+	MinMiners        int  `json:"minMiners"`        // minimum concurrent miners
+	MaxMiners        int  `json:"maxMiners"`        // maximum concurrent miners
+	Duration         int  `json:"duration"`         // simulation duration in seconds (0 = infinite)
+	HighPerformance  bool `json:"highPerformance"`  // enable high-performance mode
+	MaxDifficulty    int  `json:"maxDifficulty"`    // maximum PoW difficulty (1-8)
+	CPUIntensive     bool `json:"cpuIntensive"`     // use maximum CPU resources
 }
 
 func (ws *WebServer) startContinuousMiningWithConfig(configMap map[string]interface{}) {
@@ -622,13 +622,13 @@ func (ws *WebServer) startContinuousMiningWithConfig(configMap map[string]interf
 		InitialIntensity: 1,
 		MaxIntensity:     4,
 		IntensityStep:    30,
-		AutoScale:       true,
-		MinMiners:       2,
-		MaxMiners:       ws.maxConcurrency, // Use detected CPU capacity
-		Duration:        0, // infinite
-		HighPerformance: false,
-		MaxDifficulty:   6, // Maximum supported difficulty
-		CPUIntensive:    false,
+		AutoScale:        true,
+		MinMiners:        2,
+		MaxMiners:        ws.maxConcurrency, // Use detected CPU capacity
+		Duration:         0,                 // infinite
+		HighPerformance:  false,
+		MaxDifficulty:    6, // Maximum supported difficulty
+		CPUIntensive:     false,
 	}
 
 	if val, ok := configMap["initialIntensity"].(float64); ok {
@@ -665,15 +665,15 @@ func (ws *WebServer) startContinuousMiningWithConfig(configMap map[string]interf
 	// High-performance overrides
 	if config.HighPerformance {
 		config.MaxMiners = ws.maxConcurrency * 2 // Push beyond normal limits
-		config.MaxDifficulty = 6 // Maximum supported PoW difficulty
-		config.IntensityStep = 10 // Faster scaling
+		config.MaxDifficulty = 6                 // Maximum supported PoW difficulty
+		config.IntensityStep = 10                // Faster scaling
 	}
-	
-	// CPU-intensive overrides  
+
+	// CPU-intensive overrides
 	if config.CPUIntensive {
 		config.MaxMiners = ws.maxConcurrency * 3 // 3x normal capacity
-		config.MaxDifficulty = 6 // Maximum supported PoW difficulty
-		runtime.GOMAXPROCS(ws.cpuCores) // Use all cores
+		config.MaxDifficulty = 6                 // Maximum supported PoW difficulty
+		runtime.GOMAXPROCS(ws.cpuCores)          // Use all cores
 	}
 
 	ws.mu.Lock()
@@ -688,11 +688,11 @@ func (ws *WebServer) startContinuousMiningWithConfig(configMap map[string]interf
 	ws.mu.Unlock()
 
 	log.Printf("🚀 Starting CONFIGURED blockchain network simulation...")
-	log.Printf("⚙️ Config: Intensity %d→%d, Miners %d→%d, AutoScale: %v", 
+	log.Printf("⚙️ Config: Intensity %d→%d, Miners %d→%d, AutoScale: %v",
 		config.InitialIntensity, config.MaxIntensity, config.MinMiners, config.MaxMiners, config.AutoScale)
-	
+
 	ws.broadcastLog("info", "🚀 Starting CONFIGURED blockchain network simulation...", "🚀")
-	configMsg := fmt.Sprintf("⚙️ Config: Intensity %d→%d, Miners %d→%d, AutoScale: %v", 
+	configMsg := fmt.Sprintf("⚙️ Config: Intensity %d→%d, Miners %d→%d, AutoScale: %v",
 		config.InitialIntensity, config.MaxIntensity, config.MinMiners, config.MaxMiners, config.AutoScale)
 	ws.broadcastLog("info", configMsg, "⚙️")
 
@@ -766,13 +766,13 @@ func (ws *WebServer) configuredNetworkController(config MiningConfig) {
 				ws.mu.Unlock()
 				return
 			}
-			
+
 			if config.AutoScale && ws.miningIntensity < config.MaxIntensity && rand.Float64() < 0.7 {
 				ws.miningIntensity++
 				msg := fmt.Sprintf("📈 Auto-scaled network intensity to level %d", ws.miningIntensity)
 				log.Printf(msg)
 				ws.broadcastLog("info", msg, "📈")
-				
+
 				if ws.miningIntensity >= 3 {
 					ws.broadcastLog("warning", "🔒 DDoS PROTECTION ACTIVATED! High network load detected", "🔒")
 				}
@@ -802,7 +802,7 @@ func (ws *WebServer) spawnMinersWithConfig(config MiningConfig) {
 			targetMiners = config.MinMiners + rand.Intn(3)
 			baseInterval = time.Duration(3+rand.Intn(4)) * time.Second
 		case 2: // Medium intensity
-			targetMiners = (config.MinMiners + config.MaxMiners) / 2 + rand.Intn(5)
+			targetMiners = (config.MinMiners+config.MaxMiners)/2 + rand.Intn(5)
 			baseInterval = time.Duration(1+rand.Intn(3)) * time.Second
 		case 3: // High intensity (DDoS protection activates)
 			targetMiners = config.MaxMiners - rand.Intn(5)
@@ -862,7 +862,7 @@ func (ws *WebServer) startContinuousMining() {
 	log.Printf("📡 Simulating real-world mining network with dynamic intensity")
 	log.Printf("🔒 DDoS protection will activate under high load")
 	log.Printf("⚡ Network will scale from 1-20+ concurrent miners")
-	
+
 	ws.broadcastLog("info", "🚀 Starting realistic blockchain network simulation...", "🚀")
 	ws.broadcastLog("info", "📡 Simulating real-world mining network with dynamic intensity", "📡")
 	ws.broadcastLog("info", "🔒 DDoS protection will activate under high load", "🔒")
@@ -910,19 +910,19 @@ func (ws *WebServer) networkSimulationController() {
 				ws.mu.Unlock()
 				return
 			}
-			
+
 			// Gradually increase intensity to simulate network growth
 			if ws.miningIntensity < 3 && rand.Float64() < 0.7 { // 70% chance to increase
 				ws.miningIntensity++
 				msg := fmt.Sprintf("📈 Network intensity increased to level %d", ws.miningIntensity)
 				log.Printf(msg)
 				ws.broadcastLog("info", msg, "📈")
-				
+
 				if ws.miningIntensity >= 3 {
 					log.Printf("🔒 DDoS PROTECTION ACTIVATED! High network load detected")
 					log.Printf("🛡️  Adaptive difficulty adjustment enabled")
 					log.Printf("⚡ Connection rate limiting engaged")
-					
+
 					ws.broadcastLog("warning", "🔒 DDoS PROTECTION ACTIVATED! High network load detected", "🔒")
 					ws.broadcastLog("warning", "🛡️ Adaptive difficulty adjustment enabled", "🛡️")
 					ws.broadcastLog("warning", "⚡ Connection rate limiting engaged", "⚡")
@@ -933,7 +933,7 @@ func (ws *WebServer) networkSimulationController() {
 				msg := fmt.Sprintf("📉 Network intensity decreased to level %d", ws.miningIntensity)
 				log.Printf(msg)
 				ws.broadcastLog("info", msg, "📉")
-				
+
 				if oldIntensity >= 3 && ws.miningIntensity < 3 {
 					log.Printf("🔓 DDoS protection deactivated - network load normalized")
 					ws.broadcastLog("success", "🔓 DDoS protection deactivated - network load normalized", "🔓")
@@ -958,16 +958,16 @@ func (ws *WebServer) spawnMinersForIntensity() {
 		// Calculate target miners and spawn interval based on intensity
 		var targetMiners int
 		var baseInterval time.Duration
-		
+
 		switch intensity {
 		case 1: // Low intensity
-			targetMiners = 2 + rand.Intn(3) // 2-4 miners
+			targetMiners = 2 + rand.Intn(3)                            // 2-4 miners
 			baseInterval = time.Duration(3+rand.Intn(4)) * time.Second // 3-6s
-		case 2: // Medium intensity  
-			targetMiners = 5 + rand.Intn(6) // 5-10 miners
+		case 2: // Medium intensity
+			targetMiners = 5 + rand.Intn(6)                            // 5-10 miners
 			baseInterval = time.Duration(1+rand.Intn(3)) * time.Second // 1-3s
 		case 3: // High intensity (triggers DDoS protection)
-			targetMiners = 15 + rand.Intn(10) // 15-24 miners
+			targetMiners = 15 + rand.Intn(10)                                   // 15-24 miners
 			baseInterval = time.Duration(200+rand.Intn(800)) * time.Millisecond // 200ms-1s
 		}
 
@@ -997,7 +997,7 @@ func (ws *WebServer) spawnMinersForIntensity() {
 func (ws *WebServer) stopContinuousMining() {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
-	
+
 	if !ws.miningActive {
 		log.Printf("Continuous mining not active, ignoring stop request")
 		return
@@ -1024,9 +1024,9 @@ func (ws *WebServer) stopContinuousMining() {
 func (ws *WebServer) clearServerState() {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
-	
+
 	log.Printf("🗑️  Clearing server state...")
-	
+
 	// Stop mining if active
 	if ws.miningActive {
 		select {
@@ -1035,7 +1035,7 @@ func (ws *WebServer) clearServerState() {
 		}
 		ws.miningActive = false
 	}
-	
+
 	// Clear all data structures
 	ws.blockchain = []Block{}
 	ws.challenges = make(map[string]*Challenge)
@@ -1043,28 +1043,28 @@ func (ws *WebServer) clearServerState() {
 	ws.recentLogs = make([]LogMessage, 0, 100)
 	ws.activeMinerCount = 0
 	ws.miningIntensity = 1
-	
+
 	// Reset stats
 	ws.stats = &MiningStats{
-		CurrentDifficulty: 2,
-		HashRate:         0,
-		AverageSolveTime: 0,
-		TotalChallenges:  0,
-		CompletedChallenges: 0,
-		LiveConnections:  0,
-		TotalConnections: 0,
-		NetworkIntensity: 1,
+		CurrentDifficulty:    2,
+		HashRate:             0,
+		AverageSolveTime:     0,
+		TotalChallenges:      0,
+		CompletedChallenges:  0,
+		LiveConnections:      0,
+		TotalConnections:     0,
+		NetworkIntensity:     1,
 		DDosProtectionActive: false,
-		ActiveMinerCount: 0,
+		ActiveMinerCount:     0,
 	}
-	
+
 	log.Printf("✅ Server state cleared - all data reset")
-	
+
 	// Broadcast clear_state message to all clients
 	ws.broadcast(WebSocketMessage{
 		Type: "clear_state",
 	})
-	
+
 	// Send fresh init data
 	for conn := range ws.clients {
 		ws.sendInitialData(conn)
@@ -1079,7 +1079,7 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 	}()
 
 	clientID := fmt.Sprintf("miner-%d-%d", time.Now().UnixNano()%10000, rand.Intn(1000))
-	
+
 	connection := &ClientConnection{
 		ID:          clientID,
 		Address:     fmt.Sprintf("192.168.%d.%d:simulated", rand.Intn(255), rand.Intn(255)),
@@ -1127,7 +1127,7 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 	if config.CPUIntensive {
 		miningAttempts = 3 + rand.Intn(5) // More attempts for CPU intensive mode
 	}
-	
+
 	for attempt := 0; attempt < miningAttempts; attempt++ {
 		// Check if mining is still active
 		ws.mu.RLock()
@@ -1143,7 +1143,7 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 		// Adaptive difficulty based on network intensity and config
 		oldDifficulty := currentDifficulty
 		maxAllowedDifficulty := min(config.MaxDifficulty, 6) // Never exceed 6 (PoW constraint)
-		
+
 		if ws.miningIntensity >= 3 && currentDifficulty < maxAllowedDifficulty {
 			// Increase difficulty during high load
 			currentDifficulty = min(maxAllowedDifficulty, currentDifficulty+1)
@@ -1167,7 +1167,7 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 			}
 		}
 		ws.mu.Unlock()
-		
+
 		seed, challengeDifficulty, err := ws.generateChallenge(currentDifficulty)
 		if err != nil {
 			log.Printf("❌ Failed to generate challenge for %s: %v", clientID[:8], err)
@@ -1190,8 +1190,8 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 
 		connection.Status = "solving"
 		ws.broadcast(WebSocketMessage{
-			Type:       "challenge",
-			Challenge:  webChallenge,
+			Type:      "challenge",
+			Challenge: webChallenge,
 		})
 
 		ws.broadcast(WebSocketMessage{
@@ -1200,7 +1200,7 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 		})
 
 		log.Printf("⛏️  Miner %s solving difficulty %d challenge (attempt %d/%d)", clientID[:8], challengeDifficulty, attempt+1, miningAttempts)
-		
+
 		// Mine the challenge
 		start := time.Now()
 		var solution string
@@ -1231,8 +1231,8 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 		}
 
 		ws.broadcast(WebSocketMessage{
-			Type:       "challenge_update",
-			Challenge:  webChallenge,
+			Type:      "challenge_update",
+			Challenge: webChallenge,
 		})
 
 		// Random break between attempts (simulate real miner behavior)
@@ -1244,7 +1244,7 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 	// Miner session end
 	connection.Status = "disconnected"
 	log.Printf("👋 Miner %s disconnecting after %d challenges", clientID[:8], connection.ChallengesCompleted)
-	
+
 	ws.broadcast(WebSocketMessage{
 		Type:       "connection",
 		Connection: connection,
@@ -1265,7 +1265,7 @@ func (ws *WebServer) simulateRealisticMiner() {
 	}()
 
 	clientID := fmt.Sprintf("miner-%d-%d", time.Now().UnixNano()%10000, rand.Intn(1000))
-	
+
 	connection := &ClientConnection{
 		ID:          clientID,
 		Address:     fmt.Sprintf("192.168.%d.%d:simulated", rand.Intn(255), rand.Intn(255)),
@@ -1310,7 +1310,7 @@ func (ws *WebServer) simulateRealisticMiner() {
 
 	// Simulate multiple mining attempts (realistic miner behavior)
 	miningAttempts := 1 + rand.Intn(3) // 1-3 attempts per session
-	
+
 	for attempt := 0; attempt < miningAttempts; attempt++ {
 		// Check if mining is still active
 		ws.mu.RLock()
@@ -1326,7 +1326,7 @@ func (ws *WebServer) simulateRealisticMiner() {
 		// Adaptive difficulty based on network intensity (max difficulty 6)
 		maxAllowedDifficulty := 6 // PoW constraint
 		oldDifficulty := currentDifficulty
-		
+
 		if ws.miningIntensity >= 3 && currentDifficulty < maxAllowedDifficulty {
 			// Increase difficulty during high load
 			currentDifficulty = min(maxAllowedDifficulty, currentDifficulty+1)
@@ -1341,7 +1341,7 @@ func (ws *WebServer) simulateRealisticMiner() {
 			ws.recordDifficultyAdjustment("decrease", oldDifficulty, currentDifficulty)
 		}
 		ws.mu.Unlock()
-		
+
 		seed, challengeDifficulty, err := ws.generateChallenge(currentDifficulty)
 		if err != nil {
 			log.Printf("❌ Failed to generate challenge for %s: %v", clientID[:8], err)
@@ -1364,8 +1364,8 @@ func (ws *WebServer) simulateRealisticMiner() {
 
 		connection.Status = "solving"
 		ws.broadcast(WebSocketMessage{
-			Type:       "challenge",
-			Challenge:  webChallenge,
+			Type:      "challenge",
+			Challenge: webChallenge,
 		})
 
 		ws.broadcast(WebSocketMessage{
@@ -1374,7 +1374,7 @@ func (ws *WebServer) simulateRealisticMiner() {
 		})
 
 		log.Printf("⛏️  Miner %s solving difficulty %d challenge (attempt %d/%d)", clientID[:8], challengeDifficulty, attempt+1, miningAttempts)
-		
+
 		// Mine the challenge
 		start := time.Now()
 		var solution string
@@ -1405,8 +1405,8 @@ func (ws *WebServer) simulateRealisticMiner() {
 		}
 
 		ws.broadcast(WebSocketMessage{
-			Type:       "challenge_update",
-			Challenge:  webChallenge,
+			Type:      "challenge_update",
+			Challenge: webChallenge,
 		})
 
 		// Random break between attempts (simulate real miner behavior)
@@ -1418,7 +1418,7 @@ func (ws *WebServer) simulateRealisticMiner() {
 	// Miner session end
 	connection.Status = "disconnected"
 	log.Printf("👋 Miner %s disconnecting after %d challenges", clientID[:8], connection.ChallengesCompleted)
-	
+
 	ws.broadcast(WebSocketMessage{
 		Type:       "connection",
 		Connection: connection,
@@ -1480,14 +1480,14 @@ func (ws *WebServer) createAndBroadcastBlock(webChallenge *Challenge, solution s
 	} else {
 		ws.stats.AverageSolveTime = newAvgSolveTime
 	}
-	
+
 	elapsedSeconds := elapsed.Seconds()
 	if elapsedSeconds > 0.001 {
 		ws.stats.HashRate = 1000.0 / elapsedSeconds
 	} else {
 		ws.stats.HashRate = 1000000.0
 	}
-	
+
 	if math.IsInf(ws.stats.HashRate, 0) || math.IsNaN(ws.stats.HashRate) {
 		ws.stats.HashRate = 0
 	}
@@ -1516,7 +1516,7 @@ func (ws *WebServer) createAndBroadcastBlock(webChallenge *Challenge, solution s
 
 func (ws *WebServer) simulateClient() {
 	clientID := fmt.Sprintf("sim-%d", rand.Intn(10000))
-	
+
 	connection := &ClientConnection{
 		ID:          clientID,
 		Address:     "127.0.0.1:simulated",
@@ -1556,8 +1556,8 @@ func (ws *WebServer) simulateClient() {
 
 	connection.Status = "solving"
 	ws.broadcast(WebSocketMessage{
-		Type:       "challenge",
-		Challenge:  webChallenge,
+		Type:      "challenge",
+		Challenge: webChallenge,
 	})
 
 	ws.broadcast(WebSocketMessage{
@@ -1632,7 +1632,7 @@ func (ws *WebServer) simulateClient() {
 		} else {
 			ws.stats.AverageSolveTime = newAvgSolveTime
 		}
-		
+
 		// Prevent division by zero for HashRate calculation
 		elapsedSeconds := elapsed.Seconds()
 		if elapsedSeconds > 0.001 { // Minimum 1ms to avoid huge hash rates
@@ -1640,7 +1640,7 @@ func (ws *WebServer) simulateClient() {
 		} else {
 			ws.stats.HashRate = 1000000.0 // Cap at 1M hashes/sec for very fast solves
 		}
-		
+
 		// Additional safety check
 		if math.IsInf(ws.stats.HashRate, 0) || math.IsNaN(ws.stats.HashRate) {
 			ws.stats.HashRate = 0
@@ -1654,8 +1654,8 @@ func (ws *WebServer) simulateClient() {
 	}
 
 	ws.broadcast(WebSocketMessage{
-		Type:       "challenge_update",
-		Challenge:  webChallenge,
+		Type:      "challenge_update",
+		Challenge: webChallenge,
 	})
 
 	ws.broadcast(WebSocketMessage{
@@ -1669,7 +1669,7 @@ func (ws *WebServer) simulateClient() {
 	ws.stats.TotalConnections = ws.totalConnections
 	statsCopy := *ws.stats
 	ws.mu.Unlock()
-	
+
 	ws.broadcast(WebSocketMessage{
 		Type:  "stats",
 		Stats: &statsCopy,
@@ -1686,9 +1686,9 @@ func (ws *WebServer) HandleSimulateClient(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	go ws.simulateClient()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 }
@@ -1698,9 +1698,9 @@ func (ws *WebServer) HandleClearState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	ws.clearServerState()
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "cleared"})
 }
@@ -1767,24 +1767,24 @@ func extractMetricValue(line string) float64 {
 	if len(parts) < 2 {
 		return -1
 	}
-	
+
 	valueStr := parts[len(parts)-1]
-	
+
 	// Handle special Prometheus values
 	if valueStr == "+Inf" || valueStr == "-Inf" || valueStr == "NaN" {
 		return -1
 	}
-	
+
 	value, err := strconv.ParseFloat(valueStr, 64)
 	if err != nil {
 		return -1
 	}
-	
+
 	// Additional check for infinity and NaN after parsing
 	if math.IsInf(value, 0) || math.IsNaN(value) {
 		return -1
 	}
-	
+
 	return value
 }
 
@@ -1793,23 +1793,23 @@ func (ws *WebServer) recordDifficultyAdjustment(direction string, oldDifficulty,
 	if ws.queries != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		labels := map[string]interface{}{
-			"direction": direction,
+			"direction":      direction,
 			"old_difficulty": oldDifficulty,
 			"new_difficulty": newDifficulty,
-			"algorithm": ws.algorithm,
+			"algorithm":      ws.algorithm,
 		}
-		
+
 		labelsJSON, _ := json.Marshal(labels)
-		
+
 		params := db.RecordMetricParams{
 			MetricName:     "difficulty_adjustment",
 			MetricValue:    1.0,
 			Labels:         labelsJSON,
 			ServerInstance: pgtype.Text{String: "webserver", Valid: true},
 		}
-		
+
 		err := ws.queries.RecordMetric(ctx, ws.db, params)
 		if err != nil {
 			log.Printf("Failed to record difficulty adjustment: %v", err)
@@ -1822,16 +1822,16 @@ func (ws *WebServer) getDifficultyAdjustmentCount() int64 {
 	if ws.queries == nil {
 		return 0
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	count, err := ws.queries.CountDifficultyAdjustments(ctx, ws.db)
 	if err != nil {
 		log.Printf("Failed to get difficulty adjustment count: %v", err)
 		return 0
 	}
-	
+
 	return count
 }
 
@@ -1841,18 +1841,18 @@ func (ws *WebServer) startMetricsBroadcast() {
 		for range ticker.C {
 			// Fetch difficulty adjustment count from database
 			difficultyAdjustments := ws.getDifficultyAdjustmentCount()
-			
+
 			// Fetch and broadcast Prometheus metrics
 			metrics := &MetricsData{
-				Timestamp:         time.Now().UnixMilli(),
-				ConnectionsTotal:  float64(len(ws.connections)),
-				CurrentDifficulty: float64(ws.stats.CurrentDifficulty),
-				PuzzlesSolvedTotal: float64(ws.stats.CompletedChallenges),
-				PuzzlesFailedTotal: 0,
-				AverageSolveTime:   ws.stats.AverageSolveTime,
-				ConnectionRate:     0,
+				Timestamp:             time.Now().UnixMilli(),
+				ConnectionsTotal:      float64(len(ws.connections)),
+				CurrentDifficulty:     float64(ws.stats.CurrentDifficulty),
+				PuzzlesSolvedTotal:    float64(ws.stats.CompletedChallenges),
+				PuzzlesFailedTotal:    0,
+				AverageSolveTime:      ws.stats.AverageSolveTime,
+				ConnectionRate:        0,
 				DifficultyAdjustments: float64(difficultyAdjustments),
-				ActiveConnections: float64(len(ws.connections)),
+				ActiveConnections:     float64(len(ws.connections)),
 			}
 
 			ws.broadcast(WebSocketMessage{
@@ -1904,7 +1904,7 @@ func (ws *WebServer) Start() {
 func (ws *WebServer) Stop() {
 	ws.clientsMux.Lock()
 	defer ws.clientsMux.Unlock()
-	
+
 	for conn := range ws.clients {
 		conn.Close()
 	}

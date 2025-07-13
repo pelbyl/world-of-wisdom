@@ -29,7 +29,7 @@ func TestFullIntegration(t *testing.T) {
 
 	// Get the actual port assigned
 	serverAddr := srv.Addr()
-	
+
 	go func() {
 		if err := srv.Start(); err != nil {
 			t.Logf("Server error: %v", err)
@@ -41,7 +41,7 @@ func TestFullIntegration(t *testing.T) {
 
 	// Test client connection and PoW solving
 	c := client.NewClient(serverAddr, 5*time.Second)
-	
+
 	quote, err := c.RequestQuote()
 	if err != nil {
 		t.Fatalf("Failed to get quote: %v", err)
@@ -80,7 +80,7 @@ func TestDifficultyAdaptation(t *testing.T) {
 	}
 
 	serverAddr := srv.Addr()
-	
+
 	go func() {
 		srv.Start()
 	}()
@@ -89,7 +89,7 @@ func TestDifficultyAdaptation(t *testing.T) {
 
 	// Rapid requests to trigger difficulty adjustment
 	c := client.NewClient(serverAddr, 5*time.Second)
-	
+
 	for i := 0; i < 15; i++ {
 		_, err := c.RequestQuote()
 		if err != nil {
@@ -121,7 +121,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	}
 
 	serverAddr := srv.Addr()
-	
+
 	go func() {
 		srv.Start()
 	}()
@@ -183,7 +183,7 @@ func TestConcurrentClients(t *testing.T) {
 	}
 
 	serverAddr := srv.Addr()
-	
+
 	go func() {
 		srv.Start()
 	}()
@@ -192,7 +192,7 @@ func TestConcurrentClients(t *testing.T) {
 
 	// Test concurrent client connections
 	results := make(chan error, 10)
-	
+
 	for i := 0; i < 10; i++ {
 		go func() {
 			c := client.NewClient(serverAddr, 5*time.Second)
@@ -227,7 +227,7 @@ func TestInvalidPoWRejection(t *testing.T) {
 	}
 
 	serverAddr := srv.Addr()
-	
+
 	go func() {
 		srv.Start()
 	}()

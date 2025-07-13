@@ -31,7 +31,7 @@ func (s *Server) getConnections(c *gin.Context) {
 	defer cancel()
 
 	limit := getLimit(c, 50)
-	
+
 	connections, err := s.queries.GetRecentConnections(ctx, s.db, int32(limit))
 	if err != nil {
 		s.handleError(c, http.StatusInternalServerError, "Failed to get connections", err)

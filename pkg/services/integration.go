@@ -11,9 +11,9 @@ import (
 
 // ServiceIntegration provides common functionality for services to integrate with the registry
 type ServiceIntegration struct {
-	registry    *ServiceRegistry
-	client      *ServiceClient
-	instance    *ServiceInstance
+	registry        *ServiceRegistry
+	client          *ServiceClient
+	instance        *ServiceInstance
 	heartbeatTicker *time.Ticker
 }
 
@@ -32,15 +32,15 @@ func NewServiceIntegration(config ServiceConfig) (*ServiceIntegration, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get local IP: %w", err)
 	}
-	
+
 	// Override with environment variable if set
 	if envAddr := os.Getenv("SERVICE_ADDRESS"); envAddr != "" {
 		address = envAddr
 	}
-	
+
 	registry := NewServiceRegistry()
 	client := NewServiceClient(registry)
-	
+
 	instance := &ServiceInstance{
 		ID:       config.ServiceID,
 		Type:     config.ServiceType,
@@ -50,21 +50,21 @@ func NewServiceIntegration(config ServiceConfig) (*ServiceIntegration, error) {
 		Metadata: config.Metadata,
 		LastSeen: time.Now(),
 	}
-	
+
 	integration := &ServiceIntegration{
 		registry: registry,
 		client:   client,
 		instance: instance,
 	}
-	
+
 	// Register this service
 	if err := registry.Register(instance); err != nil {
 		return nil, fmt.Errorf("failed to register service: %w", err)
 	}
-	
+
 	// Start heartbeat
 	integration.startHeartbeat()
-	
+
 	return integration, nil
 }
 
@@ -106,12 +106,12 @@ func (s *ServiceIntegration) UpdateMetadata(metadata map[string]string) {
 // Shutdown gracefully shuts down the service integration
 func (s *ServiceIntegration) Shutdown(ctx context.Context) error {
 	log.Printf("🔗 Shutting down service integration for %s", s.instance.ID)
-	
+
 	// Stop heartbeat
 	if s.heartbeatTicker != nil {
 		s.heartbeatTicker.Stop()
 	}
-	
+
 	// Deregister service
 	return s.registry.Deregister(s.instance.ID)
 }
@@ -119,7 +119,7 @@ func (s *ServiceIntegration) Shutdown(ctx context.Context) error {
 // startHeartbeat starts sending periodic heartbeats
 func (s *ServiceIntegration) startHeartbeat() {
 	s.heartbeatTicker = time.NewTicker(30 * time.Second)
-	
+
 	go func() {
 		for range s.heartbeatTicker.C {
 			if err := s.registry.Heartbeat(s.instance.ID); err != nil {
@@ -136,7 +136,7 @@ func getLocalIP() (string, error) {
 		return "", err
 	}
 	defer conn.Close()
-	
+
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 	return localAddr.IP.String(), nil
 }
@@ -144,13 +144,13 @@ func getLocalIP() (string, error) {
 // DiscoverServices is a helper to discover and log available services
 func (s *ServiceIntegration) DiscoverServices() {
 	log.Printf("🔍 Discovering available services...")
-	
+
 	for _, serviceType := range []ServiceType{ServiceTypeTCPServer, ServiceTypeWebServer, ServiceTypeAPIServer} {
 		instances := s.registry.Discover(serviceType)
 		if len(instances) > 0 {
 			log.Printf("  📡 %s: %d instances", serviceType, len(instances))
 			for _, instance := range instances {
-				log.Printf("    - %s at %s:%d (%s)", 
+				log.Printf("    - %s at %s:%d (%s)",
 					instance.ID, instance.Address, instance.Port, instance.Health)
 			}
 		}
@@ -160,17 +160,17 @@ func (s *ServiceIntegration) DiscoverServices() {
 // WaitForService waits for at least one healthy instance of a service type
 func (s *ServiceIntegration) WaitForService(ctx context.Context, serviceType ServiceType, timeout time.Duration) error {
 	log.Printf("⏳ Waiting for %s service...", serviceType)
-	
+
 	deadline := time.Now().Add(timeout)
-	
+
 	for time.Now().Before(deadline) {
 		instances := s.registry.Discover(serviceType)
 		if len(instances) > 0 {
-			log.Printf("✅ Found %s service: %s at %s:%d", 
+			log.Printf("✅ Found %s service: %s at %s:%d",
 				serviceType, instances[0].ID, instances[0].Address, instances[0].Port)
 			return nil
 		}
-		
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -178,25 +178,25 @@ func (s *ServiceIntegration) WaitForService(ctx context.Context, serviceType Ser
 			// Continue waiting
 		}
 	}
-	
+
 	return fmt.Errorf("timeout waiting for %s service", serviceType)
 }
 
 // RegisterWithLoadBalancer registers this service with any available load balancers
 func (s *ServiceIntegration) RegisterWithLoadBalancer() error {
 	instances := s.registry.Discover(ServiceTypeLoadBalancer)
-	
+
 	for _, lb := range instances {
 		log.Printf("🔗 Registering with load balancer: %s", lb.ID)
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		
+
 		err := s.client.CallServiceJSON(ctx, ServiceTypeLoadBalancer, "POST", "/register", s.instance, nil)
 		if err != nil {
 			log.Printf("⚠️ Failed to register with load balancer %s: %v", lb.ID, err)
 		}
 	}
-	
+
 	return nil
 }

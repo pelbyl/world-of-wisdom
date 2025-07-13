@@ -53,7 +53,7 @@ func SolveChallenge(challenge *Challenge) (string, error) {
 		if VerifyPoW(challenge.Seed, nonceStr, challenge.Difficulty) {
 			return nonceStr, nil
 		}
-		
+
 		if nonce > 100000000 {
 			return "", fmt.Errorf("solution not found after %d attempts", nonce)
 		}

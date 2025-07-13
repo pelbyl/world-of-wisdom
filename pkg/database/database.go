@@ -20,7 +20,7 @@ type Config struct {
 	PostgresPassword string
 	PostgresDB       string
 	PostgresSSLMode  string
-	
+
 	RedisHost     string
 	RedisPort     int
 	RedisPassword string
@@ -37,7 +37,7 @@ func NewDatabase(cfg Config) (*Database, error) {
 	// PostgreSQL connection
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.PostgresHost, cfg.PostgresPort, cfg.PostgresUser, cfg.PostgresPassword, cfg.PostgresDB, cfg.PostgresSSLMode)
-	
+
 	db, err := sqlx.Connect("postgres", psqlInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
@@ -87,19 +87,19 @@ func (d *Database) Close() error {
 
 // Challenge operations
 type Challenge struct {
-	ID           string    `db:"id" json:"id"`
-	Seed         string    `db:"seed" json:"seed"`
-	Difficulty   int       `db:"difficulty" json:"difficulty"`
-	Algorithm    string    `db:"algorithm" json:"algorithm"`
-	ClientID     string    `db:"client_id" json:"clientId"`
-	Status       string    `db:"status" json:"status"`
-	CreatedAt    time.Time `db:"created_at" json:"createdAt"`
-	SolvedAt     *time.Time `db:"solved_at" json:"solvedAt,omitempty"`
-	ExpiresAt    time.Time `db:"expires_at" json:"expiresAt"`
-	Argon2Time   *int      `db:"argon2_time" json:"argon2Time,omitempty"`
-	Argon2Memory *int      `db:"argon2_memory" json:"argon2Memory,omitempty"`
-	Argon2Threads *int     `db:"argon2_threads" json:"argon2Threads,omitempty"`
-	Argon2Keylen *int      `db:"argon2_keylen" json:"argon2Keylen,omitempty"`
+	ID            string     `db:"id" json:"id"`
+	Seed          string     `db:"seed" json:"seed"`
+	Difficulty    int        `db:"difficulty" json:"difficulty"`
+	Algorithm     string     `db:"algorithm" json:"algorithm"`
+	ClientID      string     `db:"client_id" json:"clientId"`
+	Status        string     `db:"status" json:"status"`
+	CreatedAt     time.Time  `db:"created_at" json:"createdAt"`
+	SolvedAt      *time.Time `db:"solved_at" json:"solvedAt,omitempty"`
+	ExpiresAt     time.Time  `db:"expires_at" json:"expiresAt"`
+	Argon2Time    *int       `db:"argon2_time" json:"argon2Time,omitempty"`
+	Argon2Memory  *int       `db:"argon2_memory" json:"argon2Memory,omitempty"`
+	Argon2Threads *int       `db:"argon2_threads" json:"argon2Threads,omitempty"`
+	Argon2Keylen  *int       `db:"argon2_keylen" json:"argon2Keylen,omitempty"`
 }
 
 type Solution struct {
@@ -114,16 +114,16 @@ type Solution struct {
 }
 
 type Connection struct {
-	ID                    string    `db:"id" json:"id"`
-	ClientID              string    `db:"client_id" json:"clientId"`
-	RemoteAddr            string    `db:"remote_addr" json:"remoteAddr"`
-	Status                string    `db:"status" json:"status"`
-	Algorithm             string    `db:"algorithm" json:"algorithm"`
-	ConnectedAt           time.Time `db:"connected_at" json:"connectedAt"`
-	DisconnectedAt        *time.Time `db:"disconnected_at" json:"disconnectedAt,omitempty"`
-	ChallengesAttempted   int       `db:"challenges_attempted" json:"challengesAttempted"`
-	ChallengesCompleted   int       `db:"challenges_completed" json:"challengesCompleted"`
-	TotalSolveTimeMs      int64     `db:"total_solve_time_ms" json:"totalSolveTimeMs"`
+	ID                  string     `db:"id" json:"id"`
+	ClientID            string     `db:"client_id" json:"clientId"`
+	RemoteAddr          string     `db:"remote_addr" json:"remoteAddr"`
+	Status              string     `db:"status" json:"status"`
+	Algorithm           string     `db:"algorithm" json:"algorithm"`
+	ConnectedAt         time.Time  `db:"connected_at" json:"connectedAt"`
+	DisconnectedAt      *time.Time `db:"disconnected_at" json:"disconnectedAt,omitempty"`
+	ChallengesAttempted int        `db:"challenges_attempted" json:"challengesAttempted"`
+	ChallengesCompleted int        `db:"challenges_completed" json:"challengesCompleted"`
+	TotalSolveTimeMs    int64      `db:"total_solve_time_ms" json:"totalSolveTimeMs"`
 }
 
 func (d *Database) CreateChallenge(challenge *Challenge) error {
@@ -131,12 +131,12 @@ func (d *Database) CreateChallenge(challenge *Challenge) error {
 		INSERT INTO challenges (seed, difficulty, algorithm, client_id, status, expires_at, argon2_time, argon2_memory, argon2_threads, argon2_keylen)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at`
-	
+
 	err := d.Postgres.QueryRow(query,
-		challenge.Seed, challenge.Difficulty, challenge.Algorithm, challenge.ClientID, 
+		challenge.Seed, challenge.Difficulty, challenge.Algorithm, challenge.ClientID,
 		challenge.Status, challenge.ExpiresAt, challenge.Argon2Time, challenge.Argon2Memory,
 		challenge.Argon2Threads, challenge.Argon2Keylen).Scan(&challenge.ID, &challenge.CreatedAt)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create challenge: %w", err)
 	}
@@ -150,13 +150,13 @@ func (d *Database) CreateChallenge(challenge *Challenge) error {
 		"client_id", challenge.ClientID,
 		"status", challenge.Status,
 	).Err()
-	
+
 	if err != nil {
 		log.Printf("Warning: failed to cache challenge in Redis: %v", err)
 	}
-	
+
 	d.Redis.Expire(d.ctx, key, 5*time.Minute)
-	
+
 	return nil
 }
 
@@ -164,20 +164,20 @@ func (d *Database) GetChallenge(id string) (*Challenge, error) {
 	// Try Redis first
 	key := fmt.Sprintf("challenge:%s", id)
 	cached := d.Redis.HGetAll(d.ctx, key).Val()
-	
+
 	if len(cached) > 0 && cached["seed"] != "" {
 		challenge := &Challenge{
-			ID:         id,
-			Seed:       cached["seed"],
-			Algorithm:  cached["algorithm"],
-			ClientID:   cached["client_id"],
-			Status:     cached["status"],
+			ID:        id,
+			Seed:      cached["seed"],
+			Algorithm: cached["algorithm"],
+			ClientID:  cached["client_id"],
+			Status:    cached["status"],
 		}
-		
+
 		if difficulty, ok := cached["difficulty"]; ok {
 			fmt.Sscanf(difficulty, "%d", &challenge.Difficulty)
 		}
-		
+
 		return challenge, nil
 	}
 
@@ -214,12 +214,12 @@ func (d *Database) CreateSolution(solution *Solution) error {
 		INSERT INTO solutions (challenge_id, nonce, hash, attempts, solve_time_ms, verified)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at`
-	
+
 	err := d.Postgres.QueryRow(query,
-		solution.ChallengeID, solution.Nonce, solution.Hash, 
+		solution.ChallengeID, solution.Nonce, solution.Hash,
 		solution.Attempts, solution.SolveTimeMs, solution.Verified).
 		Scan(&solution.ID, &solution.CreatedAt)
-	
+
 	return err
 }
 
@@ -228,11 +228,11 @@ func (d *Database) CreateConnection(conn *Connection) error {
 		INSERT INTO connections (client_id, remote_addr, status, algorithm)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, connected_at`
-	
+
 	err := d.Postgres.QueryRow(query,
 		conn.ClientID, conn.RemoteAddr, conn.Status, conn.Algorithm).
 		Scan(&conn.ID, &conn.ConnectedAt)
-	
+
 	return err
 }
 
@@ -242,14 +242,14 @@ func (d *Database) UpdateConnection(id string, status string, challengesAttempte
 		SET status = $1, challenges_attempted = $2, challenges_completed = $3, 
 		    total_solve_time_ms = $4, disconnected_at = $5
 		WHERE id = $1`
-	
+
 	_, err := d.Postgres.Exec(query, status, challengesAttempted, challengesCompleted, totalSolveTimeMs, disconnectedAt)
 	return err
 }
 
 func (d *Database) RecordMetric(name string, value float64, labels map[string]interface{}) error {
 	query := `INSERT INTO metrics (metric_name, metric_value, labels) VALUES ($1, $2, $3)`
-	
+
 	var labelsJSON []byte
 	var err error
 	if labels != nil {
@@ -260,7 +260,7 @@ func (d *Database) RecordMetric(name string, value float64, labels map[string]in
 	} else {
 		labelsJSON = []byte("{}")
 	}
-	
+
 	_, err = d.Postgres.Exec(query, name, value, labelsJSON)
 	return err
 }
@@ -275,7 +275,7 @@ func (d *Database) GetChallengeStats(hours int) ([]map[string]interface{}, error
 		WHERE created_at >= NOW() - INTERVAL '%d hours'
 		GROUP BY algorithm, difficulty, status
 		ORDER BY algorithm, difficulty, status`
-	
+
 	rows, err := d.Postgres.Query(fmt.Sprintf(query, hours))
 	if err != nil {
 		return nil, err
@@ -294,10 +294,10 @@ func (d *Database) GetChallengeStats(hours int) ([]map[string]interface{}, error
 		}
 
 		result := map[string]interface{}{
-			"algorithm":        algorithm,
-			"difficulty":       difficulty,
-			"status":          status,
-			"count":           count,
+			"algorithm":         algorithm,
+			"difficulty":        difficulty,
+			"status":            status,
+			"count":             count,
 			"avg_solve_time_ms": nil,
 		}
 

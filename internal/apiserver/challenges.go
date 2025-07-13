@@ -11,14 +11,14 @@ import (
 )
 
 type CreateChallengeRequest struct {
-	Seed           string `json:"seed" binding:"required"`
-	Difficulty     int32  `json:"difficulty" binding:"required,min=1,max=6"`
-	Algorithm      string `json:"algorithm" binding:"required,oneof=sha256 argon2"`
-	ClientID       string `json:"clientId" binding:"required"`
-	Argon2Time     *int32 `json:"argon2Time,omitempty"`
-	Argon2Memory   *int32 `json:"argon2Memory,omitempty"`
-	Argon2Threads  *int16 `json:"argon2Threads,omitempty"`
-	Argon2KeyLen   *int32 `json:"argon2KeyLen,omitempty"`
+	Seed          string `json:"seed" binding:"required"`
+	Difficulty    int32  `json:"difficulty" binding:"required,min=1,max=6"`
+	Algorithm     string `json:"algorithm" binding:"required,oneof=sha256 argon2"`
+	ClientID      string `json:"clientId" binding:"required"`
+	Argon2Time    *int32 `json:"argon2Time,omitempty"`
+	Argon2Memory  *int32 `json:"argon2Memory,omitempty"`
+	Argon2Threads *int16 `json:"argon2Threads,omitempty"`
+	Argon2KeyLen  *int32 `json:"argon2KeyLen,omitempty"`
 }
 
 type UpdateChallengeStatusRequest struct {
@@ -40,7 +40,7 @@ func (s *Server) getChallenges(c *gin.Context) {
 	defer cancel()
 
 	limit := getLimit(c, 50)
-	
+
 	challenges, err := s.queries.GetRecentChallenges(ctx, s.db, int32(limit))
 	if err != nil {
 		s.handleError(c, http.StatusInternalServerError, "Failed to get challenges", err)
@@ -236,7 +236,7 @@ func (s *Server) getChallengesByDifficulty(c *gin.Context) {
 
 func (s *Server) getChallengesByAlgorithm(c *gin.Context) {
 	algorithmStr := c.Param("algorithm")
-	
+
 	var algorithm db.PowAlgorithm
 	switch algorithmStr {
 	case "sha256":

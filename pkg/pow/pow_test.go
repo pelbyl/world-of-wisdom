@@ -103,7 +103,7 @@ func TestSolveChallenge(t *testing.T) {
 
 func BenchmarkSolveChallenge(b *testing.B) {
 	difficulties := []int{1, 2, 3, 4}
-	
+
 	for _, diff := range difficulties {
 		b.Run(fmt.Sprintf("Difficulty%d", diff), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {

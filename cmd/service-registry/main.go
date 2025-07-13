@@ -155,9 +155,9 @@ func main() {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"totalServices":   len(allServices),
-			"servicesByType":  stats,
-			"timestamp":       time.Now().UTC(),
+			"totalServices":  len(allServices),
+			"servicesByType": stats,
+			"timestamp":      time.Now().UTC(),
 		})
 	})
 

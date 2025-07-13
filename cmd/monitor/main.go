@@ -18,38 +18,38 @@ import (
 )
 
 type Monitor struct {
-	registry          *services.HTTPServiceClient
-	serviceHealth     *prometheus.GaugeVec
-	serviceInstances  *prometheus.GaugeVec
-	responseTime      *prometheus.HistogramVec
-	lastChecked       *prometheus.GaugeVec
+	registry         *services.HTTPServiceClient
+	serviceHealth    *prometheus.GaugeVec
+	serviceInstances *prometheus.GaugeVec
+	responseTime     *prometheus.HistogramVec
+	lastChecked      *prometheus.GaugeVec
 }
 
 type ServiceStatus struct {
-	ServiceType     string                 `json:"serviceType"`
-	HealthyCount    int                    `json:"healthyCount"`
-	UnhealthyCount  int                    `json:"unhealthyCount"`
-	TotalInstances  int                    `json:"totalInstances"`
-	Instances       []InstanceDetail       `json:"instances"`
-	LastChecked     time.Time              `json:"lastChecked"`
+	ServiceType    string           `json:"serviceType"`
+	HealthyCount   int              `json:"healthyCount"`
+	UnhealthyCount int              `json:"unhealthyCount"`
+	TotalInstances int              `json:"totalInstances"`
+	Instances      []InstanceDetail `json:"instances"`
+	LastChecked    time.Time        `json:"lastChecked"`
 }
 
 type InstanceDetail struct {
-	ID          string            `json:"id"`
-	Address     string            `json:"address"`
-	Port        int               `json:"port"`
-	Health      string            `json:"health"`
-	LastSeen    time.Time         `json:"lastSeen"`
-	Metadata    map[string]string `json:"metadata"`
-	ResponseTime float64          `json:"responseTime"`
+	ID           string            `json:"id"`
+	Address      string            `json:"address"`
+	Port         int               `json:"port"`
+	Health       string            `json:"health"`
+	LastSeen     time.Time         `json:"lastSeen"`
+	Metadata     map[string]string `json:"metadata"`
+	ResponseTime float64           `json:"responseTime"`
 }
 
 type SystemOverview struct {
-	TotalServices    int             `json:"totalServices"`
-	HealthyServices  int             `json:"healthyServices"`
-	ServiceStatuses  []ServiceStatus `json:"serviceStatuses"`
-	Timestamp        time.Time       `json:"timestamp"`
-	SystemHealth     string          `json:"systemHealth"`
+	TotalServices   int             `json:"totalServices"`
+	HealthyServices int             `json:"healthyServices"`
+	ServiceStatuses []ServiceStatus `json:"serviceStatuses"`
+	Timestamp       time.Time       `json:"timestamp"`
+	SystemHealth    string          `json:"systemHealth"`
 }
 
 func NewMonitor(registryURL string) *Monitor {
@@ -96,43 +96,43 @@ func (m *Monitor) registerMetrics() {
 
 func (m *Monitor) checkServiceHealth(instance *services.ServiceInstance) (bool, float64) {
 	start := time.Now()
-	
+
 	healthURL := fmt.Sprintf("http://%s:%d/health", instance.Address, instance.Port)
 	client := &http.Client{Timeout: 10 * time.Second}
-	
+
 	resp, err := client.Get(healthURL)
 	duration := time.Since(start).Seconds()
-	
+
 	if err != nil {
 		log.Printf("Health check failed for %s (%s): %v", instance.ID, healthURL, err)
 		return false, duration
 	}
 	defer resp.Body.Close()
-	
+
 	healthy := resp.StatusCode == http.StatusOK
-	
+
 	// Update Prometheus metrics
 	healthValue := 0.0
 	if healthy {
 		healthValue = 1.0
 	}
-	
+
 	m.serviceHealth.WithLabelValues(
 		string(instance.Type),
 		instance.ID,
 		fmt.Sprintf("%s:%d", instance.Address, instance.Port),
 	).Set(healthValue)
-	
+
 	m.responseTime.WithLabelValues(
 		string(instance.Type),
 		instance.ID,
 	).Observe(duration)
-	
+
 	m.lastChecked.WithLabelValues(
 		string(instance.Type),
 		instance.ID,
 	).SetToCurrentTime()
-	
+
 	return healthy, duration
 }
 
@@ -143,17 +143,17 @@ func (m *Monitor) monitorServices() {
 		services.ServiceTypeAPIServer,
 		services.ServiceTypeLoadBalancer,
 	}
-	
+
 	for _, serviceType := range serviceTypes {
 		instances, err := m.registry.DiscoverServices(serviceType)
 		if err != nil {
 			log.Printf("Failed to discover %s services: %v", serviceType, err)
 			continue
 		}
-		
+
 		healthyCount := 0
 		unhealthyCount := 0
-		
+
 		for _, instance := range instances {
 			healthy, _ := m.checkServiceHealth(instance)
 			if healthy {
@@ -162,11 +162,11 @@ func (m *Monitor) monitorServices() {
 				unhealthyCount++
 			}
 		}
-		
+
 		// Update instance count metrics
 		m.serviceInstances.WithLabelValues(string(serviceType), "healthy").Set(float64(healthyCount))
 		m.serviceInstances.WithLabelValues(string(serviceType), "unhealthy").Set(float64(unhealthyCount))
-		
+
 		log.Printf("Service %s: %d healthy, %d unhealthy", serviceType, healthyCount, unhealthyCount)
 	}
 }
@@ -178,26 +178,26 @@ func (m *Monitor) getSystemOverview() (*SystemOverview, error) {
 		services.ServiceTypeAPIServer,
 		services.ServiceTypeLoadBalancer,
 	}
-	
+
 	var statuses []ServiceStatus
 	totalServices := 0
 	healthyServices := 0
-	
+
 	for _, serviceType := range serviceTypes {
 		instances, err := m.registry.DiscoverServices(serviceType)
 		if err != nil {
 			continue
 		}
-		
+
 		status := ServiceStatus{
 			ServiceType:    string(serviceType),
 			TotalInstances: len(instances),
 			LastChecked:    time.Now(),
 		}
-		
+
 		for _, instance := range instances {
 			healthy, responseTime := m.checkServiceHealth(instance)
-			
+
 			detail := InstanceDetail{
 				ID:           instance.ID,
 				Address:      instance.Address,
@@ -207,7 +207,7 @@ func (m *Monitor) getSystemOverview() (*SystemOverview, error) {
 				Metadata:     instance.Metadata,
 				ResponseTime: responseTime,
 			}
-			
+
 			if healthy {
 				detail.Health = "healthy"
 				status.HealthyCount++
@@ -215,15 +215,15 @@ func (m *Monitor) getSystemOverview() (*SystemOverview, error) {
 				detail.Health = "unhealthy"
 				status.UnhealthyCount++
 			}
-			
+
 			status.Instances = append(status.Instances, detail)
 		}
-		
+
 		statuses = append(statuses, status)
 		totalServices += status.TotalInstances
 		healthyServices += status.HealthyCount
 	}
-	
+
 	// Determine overall system health
 	systemHealth := "critical"
 	if healthyServices == totalServices && totalServices > 0 {
@@ -231,12 +231,12 @@ func (m *Monitor) getSystemOverview() (*SystemOverview, error) {
 	} else if healthyServices > totalServices/2 {
 		systemHealth = "degraded"
 	}
-	
+
 	// Sort statuses by service type for consistent output
 	sort.Slice(statuses, func(i, j int) bool {
 		return statuses[i].ServiceType < statuses[j].ServiceType
 	})
-	
+
 	return &SystemOverview{
 		TotalServices:   totalServices,
 		HealthyServices: healthyServices,
@@ -266,11 +266,11 @@ func main() {
 	defer cancel()
 
 	monitorInstance := &services.ServiceInstance{
-		ID:       "monitor-1",
-		Type:     services.ServiceTypeMonitor,
-		Address:  "monitor",
-		Port:     8085,
-		Health:   "healthy",
+		ID:      "monitor-1",
+		Type:    services.ServiceTypeMonitor,
+		Address: "monitor",
+		Port:    8085,
+		Health:  "healthy",
 		Metadata: map[string]string{
 			"version": "1.0.0",
 			"role":    "health-monitor",
@@ -330,7 +330,7 @@ func main() {
 
 		for _, instance := range instances {
 			healthy, responseTime := monitor.checkServiceHealth(instance)
-			
+
 			detail := InstanceDetail{
 				ID:           instance.ID,
 				Address:      instance.Address,
@@ -352,12 +352,12 @@ func main() {
 		}
 
 		c.JSON(http.StatusOK, ServiceStatus{
-			ServiceType:     string(serviceType),
-			HealthyCount:    healthyCount,
-			UnhealthyCount:  len(instances) - healthyCount,
-			TotalInstances:  len(instances),
-			Instances:       details,
-			LastChecked:     time.Now(),
+			ServiceType:    string(serviceType),
+			HealthyCount:   healthyCount,
+			UnhealthyCount: len(instances) - healthyCount,
+			TotalInstances: len(instances),
+			Instances:      details,
+			LastChecked:    time.Now(),
 		})
 	})
 

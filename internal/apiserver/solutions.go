@@ -37,7 +37,7 @@ func (s *Server) getSolutions(c *gin.Context) {
 	defer cancel()
 
 	limit := getLimit(c, 50)
-	
+
 	solutions, err := s.queries.GetRecentSolutions(ctx, s.db, int32(limit))
 	if err != nil {
 		s.handleError(c, http.StatusInternalServerError, "Failed to get solutions", err)

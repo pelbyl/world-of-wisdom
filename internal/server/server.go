@@ -15,22 +15,22 @@ import (
 )
 
 type Server struct {
-	listener       net.Listener
-	quoteProvider  *wisdom.QuoteProvider
-	difficulty     int
-	timeout        time.Duration
-	mu             sync.RWMutex
-	activeConns    sync.WaitGroup
-	shutdownChan   chan struct{}
-	
+	listener      net.Listener
+	quoteProvider *wisdom.QuoteProvider
+	difficulty    int
+	timeout       time.Duration
+	mu            sync.RWMutex
+	activeConns   sync.WaitGroup
+	shutdownChan  chan struct{}
+
 	// Adaptive difficulty tracking
 	solveTimes     []time.Duration
 	connectionRate int64
 	lastAdjustment time.Time
 	adaptiveMode   bool
-	
+
 	// PoW algorithm selection
-	algorithm      string // "sha256" or "argon2"
+	algorithm string // "sha256" or "argon2"
 }
 
 type Config struct {
@@ -121,11 +121,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.trackConnection()
 
 	difficulty := s.getDifficulty()
-	
+
 	// Generate challenge based on algorithm
 	var challengeStr string
 	var verifySolution func(string) bool
-	
+
 	if s.algorithm == "sha256" {
 		challenge, err := pow.GenerateChallenge(difficulty)
 		if err != nil {
@@ -169,20 +169,20 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if verifySolution(response) {
 		log.Printf("Client %s solved the %s challenge in %v", clientAddr, s.algorithm, solveTime)
 		s.recordSolveTime(solveTime)
-		
+
 		// Record metrics
 		metrics.RecordPuzzleSolved(difficulty, solveTime)
 		metrics.RecordProcessingTime("success", time.Since(startTime))
-		
+
 		quote := s.quoteProvider.GetRandomQuote()
 		conn.Write([]byte(quote + "\n"))
 	} else {
 		log.Printf("Client %s failed the %s challenge", clientAddr, s.algorithm)
-		
+
 		// Record metrics
 		metrics.RecordPuzzleFailed(difficulty)
 		metrics.RecordProcessingTime("failed", time.Since(startTime))
-		
+
 		conn.Write([]byte("Error: Invalid proof of work\n"))
 	}
 }
@@ -207,7 +207,7 @@ func (s *Server) SetDifficulty(difficulty int) error {
 func (s *Server) Shutdown() error {
 	log.Println("Shutting down server...")
 	close(s.shutdownChan)
-	
+
 	err := s.listener.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close listener: %w", err)
@@ -233,7 +233,7 @@ func (s *Server) trackConnection() {
 	if !s.adaptiveMode {
 		return
 	}
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.connectionRate++
@@ -243,17 +243,17 @@ func (s *Server) recordSolveTime(solveTime time.Duration) {
 	if !s.adaptiveMode {
 		return
 	}
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	s.solveTimes = append(s.solveTimes, solveTime)
-	
+
 	// Keep only last 50 solve times
 	if len(s.solveTimes) > 50 {
 		s.solveTimes = s.solveTimes[len(s.solveTimes)-50:]
 	}
-	
+
 	// Adjust difficulty every 10 solutions or every 30 seconds
 	if len(s.solveTimes) >= 10 || time.Since(s.lastAdjustment) > 30*time.Second {
 		s.adjustDifficulty()
@@ -264,23 +264,23 @@ func (s *Server) adjustDifficulty() {
 	if len(s.solveTimes) == 0 {
 		return
 	}
-	
+
 	// Calculate average solve time
 	var total time.Duration
 	for _, t := range s.solveTimes {
 		total += t
 	}
 	avgSolveTime := total / time.Duration(len(s.solveTimes))
-	
+
 	oldDifficulty := s.difficulty
-	
+
 	// Adaptive difficulty rules:
 	// - If avg solve time < 1s: increase difficulty
 	// - If avg solve time > 5s: decrease difficulty
 	// - If connection rate is high (>20/min): increase difficulty
-	
+
 	connectionRatePerMinute := float64(s.connectionRate) / time.Since(s.lastAdjustment).Minutes()
-	
+
 	if avgSolveTime < time.Second || connectionRatePerMinute > 20 {
 		if s.difficulty < 6 {
 			s.difficulty++
@@ -290,21 +290,21 @@ func (s *Server) adjustDifficulty() {
 			s.difficulty--
 		}
 	}
-	
+
 	if s.difficulty != oldDifficulty {
 		direction := "increase"
 		if s.difficulty < oldDifficulty {
 			direction = "decrease"
 		}
-		
-		log.Printf("Adaptive difficulty: %d -> %d (avg solve: %v, rate: %.1f/min)", 
+
+		log.Printf("Adaptive difficulty: %d -> %d (avg solve: %v, rate: %.1f/min)",
 			oldDifficulty, s.difficulty, avgSolveTime, connectionRatePerMinute)
-		
+
 		// Record metrics
 		metrics.RecordDifficultyAdjustment(direction)
 		metrics.UpdateCurrentDifficulty(s.difficulty)
 	}
-	
+
 	// Reset tracking
 	s.solveTimes = s.solveTimes[:0]
 	s.connectionRate = 0
@@ -314,7 +314,7 @@ func (s *Server) adjustDifficulty() {
 func (s *Server) GetStats() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	var avgSolveTime time.Duration
 	if len(s.solveTimes) > 0 {
 		var total time.Duration
@@ -323,16 +323,16 @@ func (s *Server) GetStats() map[string]interface{} {
 		}
 		avgSolveTime = total / time.Duration(len(s.solveTimes))
 	}
-	
+
 	connectionRatePerMinute := float64(s.connectionRate) / time.Since(s.lastAdjustment).Minutes()
-	
+
 	return map[string]interface{}{
-		"difficulty":           s.difficulty,
-		"adaptive_mode":        s.adaptiveMode,
-		"avg_solve_time_ms":    avgSolveTime.Milliseconds(),
-		"connection_rate":      connectionRatePerMinute,
-		"recent_solve_count":   len(s.solveTimes),
-		"last_adjustment":      s.lastAdjustment.Unix(),
+		"difficulty":         s.difficulty,
+		"adaptive_mode":      s.adaptiveMode,
+		"avg_solve_time_ms":  avgSolveTime.Milliseconds(),
+		"connection_rate":    connectionRatePerMinute,
+		"recent_solve_count": len(s.solveTimes),
+		"last_adjustment":    s.lastAdjustment.Unix(),
 	}
 }
 
