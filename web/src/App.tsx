@@ -10,48 +10,55 @@ import { MetricsDashboard } from './components/MetricsDashboard'
 import { LogsPanel } from './components/LogsPanel'
 import ConnectionStatus from './components/ConnectionStatus'
 import { useWebSocket } from './hooks/useWebSocket'
-import { loadState, startAutoSave, setupBeforeUnloadSave } from './utils/persistence'
+// Removed localStorage persistence - service is now stateless
 import { Block, Challenge, ClientConnection, MiningStats, MetricsData, LogMessage } from './types'
+import { apiClient, convertApiLogToLogMessage } from './utils/api'
 
 function App() {
-  // Initialize state with persisted data if available
-  const initializeState = () => {
-    const persistedState = loadState()
-    return {
-      blocks: persistedState?.blocks || [],
-      connections: persistedState?.connections || [],
-      stats: {
-        totalChallenges: 0,
-        completedChallenges: 0,
-        averageSolveTime: 0,
-        currentDifficulty: 2,
-        hashRate: 0,
-        liveConnections: 0,
-        totalConnections: 0,
-        networkIntensity: 1,
-        ddosProtectionActive: false,
-        activeMinerCount: 0,
-        ...persistedState?.stats
-      },
-      logs: (persistedState?.logs || []).map(log => ({
-        ...log,
-        timestamp: typeof log.timestamp === 'string' ? Date.parse(log.timestamp) : log.timestamp
-      })),
-      metrics: persistedState?.metrics || null
-    }
-  }
-
-  const initialState = initializeState()
-  const [blocks, setBlocks] = useState<Block[]>(initialState.blocks)
+  // Stateless initialization - all data comes from server
+  const [blocks, setBlocks] = useState<Block[]>([])
   const [currentChallenges, setCurrentChallenges] = useState<Challenge[]>([])
-  const [connections, setConnections] = useState<ClientConnection[]>(initialState.connections)
-  const [stats, setStats] = useState<MiningStats>(initialState.stats)
-  const [metrics, setMetrics] = useState<MetricsData | null>(initialState.metrics)
+  const [connections, setConnections] = useState<ClientConnection[]>([])
+  const [stats, setStats] = useState<MiningStats>({
+    totalChallenges: 0,
+    completedChallenges: 0,
+    averageSolveTime: 0,
+    currentDifficulty: 2,
+    hashRate: 0,
+    liveConnections: 0,
+    totalConnections: 0,
+    networkIntensity: 1,
+    ddosProtectionActive: false,
+    activeMinerCount: 0,
+  })
+  const [metrics, setMetrics] = useState<MetricsData | null>(null)
   const [miningActive, setMiningActive] = useState(false)
-  const [logs, setLogs] = useState<LogMessage[]>(initialState.logs)
+  const [logs, setLogs] = useState<LogMessage[]>([])
   const [isRecovering, setIsRecovering] = useState(false)
 
   const { sendMessage, lastMessage, readyState, connectionState, forceReconnect } = useWebSocket('ws://localhost:8081/ws')
+
+  // Fetch logs from API
+  const fetchLogs = useCallback(async () => {
+    try {
+      const apiLogs = await apiClient.getRecentLogs(100)
+      const logs = apiLogs.map(convertApiLogToLogMessage)
+      setLogs(logs)
+    } catch (error) {
+      console.error('Failed to fetch logs from API:', error)
+    }
+  }, [])
+
+  // Initial data load and adaptive polling based on connection state
+  useEffect(() => {
+    fetchLogs()
+    
+    // Adaptive polling: faster during degraded mode, slower when WebSocket is working
+    const pollInterval = connectionState.degradedMode || connectionState.isError ? 5000 : 30000
+    const interval = setInterval(fetchLogs, pollInterval)
+    
+    return () => clearInterval(interval)
+  }, [fetchLogs, connectionState.degradedMode, connectionState.isError])
 
   useEffect(() => {
     if (lastMessage) {
@@ -94,19 +101,20 @@ function App() {
             break
           case 'log':
             if (data.log) {
+              // Add new log immediately for real-time feedback
               setLogs(prev => [...prev.slice(-99), data.log]) // Keep last 100 logs
+              // Note: Database is the source of truth, periodic refresh will sync any differences
             }
             break
           case 'init':
-            // Merge server data with persisted data intelligently
-            if (data.blocks && data.blocks.length > blocks.length) {
-              setBlocks(data.blocks)
-            }
-            if (data.connections) {
-              setConnections(data.connections)
-            }
+            // Stateless: Always use server data as the source of truth
+            setBlocks(data.blocks || [])
+            setConnections(data.connections || [])
+            setCurrentChallenges(data.challenges || [])
+            // Fetch logs from API instead of WebSocket to ensure database consistency
+            fetchLogs()
             if (data.stats) {
-              setStats(prev => ({ ...prev, ...data.stats }))
+              setStats(data.stats)
             }
             setMiningActive(data.miningActive || false)
             setIsRecovering(false)
@@ -118,25 +126,7 @@ function App() {
     }
   }, [lastMessage])
 
-  // Get current state for persistence
-  const getCurrentState = useCallback(() => ({
-    stats,
-    blocks,
-    connections,
-    logs,
-    metrics
-  }), [stats, blocks, connections, logs, metrics])
-
-  // Set up auto-save and before-unload save
-  useEffect(() => {
-    const stopAutoSave = startAutoSave(getCurrentState)
-    const stopBeforeUnloadSave = setupBeforeUnloadSave(getCurrentState)
-    
-    return () => {
-      stopAutoSave()
-      stopBeforeUnloadSave()
-    }
-  }, [getCurrentState])
+  // Stateless service - no persistence needed
 
   // Handle connection recovery
   useEffect(() => {

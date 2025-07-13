@@ -85,6 +85,17 @@ func (s *Server) SetupRoutes(router *gin.Engine) {
 			metrics.GET("/system", s.getSystemMetrics)
 		}
 
+		// Logs endpoints
+		logs := api.Group("/logs")
+		{
+			logs.GET("", s.getLogs)
+			logs.POST("", s.createLog)
+			logs.GET("/paginated", s.getLogsPaginated)
+			logs.GET("/level/:level", s.getLogsByLevel)
+			logs.GET("/stats", s.getLogStats)
+			logs.GET("/range", s.getLogsInTimeRange)
+		}
+
 		// Documentation endpoint
 		api.GET("/docs", s.getAPIDocumentation)
 	}

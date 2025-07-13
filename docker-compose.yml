@@ -12,6 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d
+      - ./scripts:/scripts
     networks:
       - wisdom-net
     healthcheck:

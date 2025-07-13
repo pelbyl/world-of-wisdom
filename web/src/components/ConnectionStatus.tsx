@@ -6,6 +6,8 @@ interface ConnectionState {
   isError: boolean
   reconnectAttempts: number
   lastError?: string
+  isHighLoad?: boolean
+  degradedMode?: boolean
 }
 
 interface Props {
@@ -16,12 +18,21 @@ interface Props {
 
 const ConnectionStatus: React.FC<Props> = ({ readyState, connectionState, onReconnect }) => {
   const getStatusInfo = () => {
+    if (connectionState.degradedMode) {
+      return {
+        text: 'API Mode (High Load)',
+        color: 'text-orange-600',
+        bgColor: 'bg-orange-100',
+        icon: '🔥'
+      }
+    }
+    
     if (connectionState.isConnected && readyState === 1) {
       return {
-        text: 'Connected',
-        color: 'text-green-600',
-        bgColor: 'bg-green-100',
-        icon: '🟢'
+        text: connectionState.isHighLoad ? 'Connected (High Load)' : 'Connected',
+        color: connectionState.isHighLoad ? 'text-yellow-600' : 'text-green-600',
+        bgColor: connectionState.isHighLoad ? 'bg-yellow-100' : 'bg-green-100',
+        icon: connectionState.isHighLoad ? '🟡' : '🟢'
       }
     }
     
