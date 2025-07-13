@@ -45,15 +45,14 @@ clean-all:
 	@echo "🧹 Starting full project cleanup..."
 	@echo "Stopping all containers..."
 	docker-compose down -v --remove-orphans || true
-	docker-compose -f docker-compose.db.yml down -v --remove-orphans || true
-	docker-compose -f docker-compose.yml -f docker-compose.microservices.yml down -v --remove-orphans || true
+	docker-compose -f docker-compose.test.yml down -v --remove-orphans || true
 	@echo "Removing all project volumes..."
 	docker volume rm wisdom-data postgres_data redis_data service-registry-data gateway-config || true
 	docker volume rm world-of-wisdom_wisdom-data world-of-wisdom_postgres_data world-of-wisdom_redis_data || true
 	docker volume rm world-of-wisdom_service-registry-data world-of-wisdom_gateway-config || true
 	@echo "Removing all project images..."
 	docker rmi world-of-wisdom-server world-of-wisdom-client world-of-wisdom-webserver world-of-wisdom-web || true
-	docker rmi world-of-wisdom-apiserver world-of-wisdom-service-registry world-of-wisdom-gateway world-of-wisdom-monitor || true
+	docker rmi world-of-wisdom-apiserver || true
 	@echo "Removing local data directories..."
 	rm -rf bin/ logs/ /tmp/wisdom-data/ || true
 	@echo "Pruning all unused Docker resources..."
@@ -67,15 +66,14 @@ clean-full:
 	@echo "🗑️  Starting COMPLETE project cleanup (including databases)..."
 	@echo "Stopping all containers..."
 	docker-compose down -v --remove-orphans || true
-	docker-compose -f docker-compose.db.yml down -v --remove-orphans || true
-	docker-compose -f docker-compose.yml -f docker-compose.microservices.yml down -v --remove-orphans || true
+	docker-compose -f docker-compose.test.yml down -v --remove-orphans || true
 	@echo "Removing ALL project-specific volumes and data..."
 	docker volume rm wisdom-data postgres_data redis_data service-registry-data gateway-config || true
 	docker volume rm world-of-wisdom_wisdom-data world-of-wisdom_postgres_data world-of-wisdom_redis_data || true
 	docker volume rm world-of-wisdom_service-registry-data world-of-wisdom_gateway-config || true
 	@echo "Removing ALL project images..."
 	docker rmi world-of-wisdom-server world-of-wisdom-client world-of-wisdom-webserver world-of-wisdom-web || true
-	docker rmi world-of-wisdom-apiserver world-of-wisdom-service-registry world-of-wisdom-gateway world-of-wisdom-monitor || true
+	docker rmi world-of-wisdom-apiserver || true
 	docker rmi world-of-wisdom-client1 world-of-wisdom-client2 || true
 	@echo "Removing local data directories and caches..."
 	rm -rf bin/ logs/ /tmp/wisdom-data/ || true
@@ -147,7 +145,7 @@ deploy-vps:
 	docker save world-of-wisdom-web:latest | gzip > vps-deploy/web.tar.gz
 	@echo "Copying deployment files..."
 	cp docker-compose.yml vps-deploy/
-	cp docker-compose.microservices.yml vps-deploy/
+	cp docker-compose.test.yml vps-deploy/
 	cp -r db/ vps-deploy/
 	@echo "📦 VPS deployment package ready in ./vps-deploy/"
 	@echo "📝 Next steps:"

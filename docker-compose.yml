@@ -14,7 +14,7 @@ services:
       - ./db/migrations:/docker-entrypoint-initdb.d
       - ./scripts:/scripts
     networks:
-      - wisdom-net
+      - wisdom-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wisdom -d wisdom"]
       interval: 30s
@@ -29,7 +29,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - wisdom-net
+      - wisdom-network
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -60,7 +60,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
     networks:
-      - wisdom-net
+      - wisdom-network
     # Resource limits for TCP server with restart policy
     restart: unless-stopped
     deploy:
@@ -96,7 +96,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
     networks:
-      - wisdom-net
+      - wisdom-network
     volumes:
       - wisdom-data:/tmp/wisdom-data
     # Resource limits and restart policy for stability
@@ -138,7 +138,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
     networks:
-      - wisdom-net
+      - wisdom-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
@@ -155,25 +155,6 @@ services:
           cpus: '0.5'
           memory: 256M
 
-  client1:
-    build:
-      context: .
-      dockerfile: Dockerfile.client
-    depends_on:
-      - server
-    command: ["-server", "server:8080", "-attempts", "5"]
-    networks:
-      - wisdom-net
-
-  client2:
-    build:
-      context: .
-      dockerfile: Dockerfile.client
-    depends_on:
-      - server
-    command: ["-server", "server:8080", "-attempts", "3"]
-    networks:
-      - wisdom-net
 
   web:
     build:
@@ -184,7 +165,7 @@ services:
     depends_on:
       - webserver
     networks:
-      - wisdom-net
+      - wisdom-network
 
 volumes:
   wisdom-data:
@@ -195,5 +176,5 @@ volumes:
     driver: local
 
 networks:
-  wisdom-net:
+  wisdom-network:
     driver: bridge
