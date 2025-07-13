@@ -9,7 +9,8 @@ import {
   Card,
   Grid,
   Badge,
-  Tooltip
+  Tooltip,
+  Alert
 } from '@mantine/core'
 import { 
   IconPlayerPlay, 
@@ -18,9 +19,12 @@ import {
   IconCpu,
   IconUsers,
   IconClock,
-  IconBolt
+  IconBolt,
+  IconWifi,
+  IconWifiOff
 } from '@tabler/icons-react'
 import { useState } from 'react'
+import DemoModeButton from './DemoModeButton'
 
 interface MiningConfig {
   initialIntensity: number
@@ -35,13 +39,29 @@ interface MiningConfig {
   cpuIntensive?: boolean
 }
 
+interface ConnectionState {
+  isConnected: boolean
+  isConnecting: boolean
+  isError: boolean
+  reconnectAttempts: number
+  lastError?: string
+}
+
 interface Props {
   onStartMining: (config?: MiningConfig) => void
   onStopMining: () => void
   miningActive: boolean
+  connectionState?: ConnectionState
+  isRecovering?: boolean
 }
 
-export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }: Props) {
+export function MiningConfigPanel({ 
+  onStartMining, 
+  onStopMining, 
+  miningActive, 
+  connectionState = { isConnected: true, isConnecting: false, isError: false, reconnectAttempts: 0 },
+  isRecovering = false 
+}: Props) {
   const [config, setConfig] = useState<MiningConfig>({
     initialIntensity: 1,
     maxIntensity: 3,
@@ -144,18 +164,11 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
         <Text size="sm" fw={500} mb="md">🚀 Quick Start Presets</Text>
         <Grid>
           <Grid.Col span={3}>
-            <Tooltip label="Light demo - 2-8 miners, 60 seconds">
-              <Button
-                fullWidth
-                variant="light"
-                color="green"
-                leftSection={<IconCpu size={16} />}
-                onClick={() => handleQuickStart('demo')}
-                disabled={miningActive}
-              >
-                Demo Mode
-              </Button>
-            </Tooltip>
+            <DemoModeButton
+              miningActive={miningActive}
+              onStartDemo={() => handleQuickStart('demo')}
+              disabled={!connectionState.isConnected || isRecovering}
+            />
           </Grid.Col>
           
           <Grid.Col span={3}>
@@ -340,6 +353,22 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
         </Card>
       )}
 
+      {/* Connection Status Alert */}
+      {(!connectionState.isConnected || isRecovering) && (
+        <Alert
+          color={connectionState.isError ? 'red' : 'yellow'}
+          title={connectionState.isError ? 'Connection Error' : isRecovering ? 'Recovering Connection' : 'Connecting...'}
+          icon={connectionState.isConnected ? <IconWifi size={16} /> : <IconWifiOff size={16} />}
+        >
+          {connectionState.isError 
+            ? 'WebSocket connection failed. Some features may not work properly.'
+            : isRecovering 
+              ? 'Reconnecting to server and recovering state...'
+              : 'Establishing connection to mining server...'
+          }
+        </Alert>
+      )}
+
       {/* Control Buttons */}
       <Group grow>
         {!miningActive ? (
@@ -349,6 +378,7 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
               color="blue"
               onClick={() => onStartMining()}
               variant="light"
+              disabled={!connectionState.isConnected || isRecovering}
             >
               Simple Start
             </Button>
@@ -356,7 +386,7 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
               leftSection={<IconPlayerPlay size={16} />}
               color="green"
               onClick={handleCustomStart}
-              disabled={!showAdvanced}
+              disabled={!showAdvanced || !connectionState.isConnected || isRecovering}
             >
               Custom Start
             </Button>
@@ -376,7 +406,11 @@ export function MiningConfigPanel({ onStartMining, onStopMining, miningActive }:
       <Text size="xs" c="dimmed" ta="center">
         {miningActive 
           ? "🟢 Network simulation is active - monitor logs for real-time activity"
-          : "⚡ Configure and start your blockchain network simulation"
+          : !connectionState.isConnected
+            ? "⚠️ Connection required to start mining operations"
+            : isRecovering
+              ? "🔄 Recovering connection - please wait..."
+              : "⚡ Configure and start your blockchain network simulation"
         }
       </Text>
     </Stack>
