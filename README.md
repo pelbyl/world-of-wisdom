@@ -13,6 +13,8 @@ make re-run
 # Access services
 # - Web UI: http://localhost:3000  
 # - TCP Server: localhost:8080
+# - REST API: http://localhost:8082/api/v1
+# - API Docs: http://localhost:8082/api/v1/docs
 # - Metrics: http://localhost:2112/metrics
 ```
 
@@ -21,6 +23,7 @@ make re-run
 - **🛡️ Advanced Security**: Argon2 memory-hard PoW puzzles with adaptive difficulty
 - **💾 Data Persistence**: PostgreSQL/TimescaleDB for metrics, Redis for caching  
 - **📊 Real-time Monitoring**: Interactive React dashboard with live WebSocket updates
+- **🚀 REST API Gateway**: Type-safe database operations with sqlc-generated queries
 - **🔄 Auto-Recovery**: Robust error handling with automatic reconnection
 - **📈 Comprehensive Metrics**: Prometheus integration with 10+ metrics
 - **🐳 Production Ready**: Docker deployment with health checks and restart policies
@@ -73,20 +76,20 @@ make re-run
 ![arch](images/arch.jpeg)
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│                   Word of Wisdom System                   │
-├─────────────┬─────────────┬─────────────┬─────────────────┤
-│   Database  │ TCP Server  │ Web Server  │ React Frontend  │
-│             │ (Port 8080) │ (Port 8081) │  (Port 3000)    │
-│ PostgreSQL  │             │             │                 │
-│ TimescaleDB │ ┌─────────┐ │ ┌─────────┐ │ ┌─────────────┐ │
-│ Redis       │ │ Argon2  │ │ │WebSocket│ │ │ Blockchain  │ │
-│             │ │ PoW     │ │ │ API     │ │ │ Visualizer  │ │
-│ ┌─────────┐ │ │ Engine  │ │ │ Mining  │ │ │ Live Logs   │ │
-│ │Metrics  │ │ │ Adaptive│ │ │ Sim     │ │ │ Statistics  │ │
-│ │Storage  │ │ │ Diff    │ │ │ Control │ │ │ Monitoring  │ │
-│ └─────────┘ │ └─────────┘ │ └─────────┘ │ └─────────────┘ │
-└─────────────┴─────────────┴─────────────┴─────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           Word of Wisdom System                          │
+├─────────────┬─────────────┬─────────────┬─────────────┬─────────────────┤
+│   Database  │ TCP Server  │ Web Server  │ API Server  │ React Frontend  │
+│             │ (Port 8080) │ (Port 8081) │ (Port 8082) │  (Port 3000)    │
+│ PostgreSQL  │             │             │             │                 │
+│ TimescaleDB │ ┌─────────┐ │ ┌─────────┐ │ ┌─────────┐ │ ┌─────────────┐ │
+│ Redis       │ │ Argon2  │ │ │WebSocket│ │ │ REST    │ │ │ Blockchain  │ │
+│             │ │ PoW     │ │ │ API     │ │ │ API     │ │ │ Visualizer  │ │
+│ ┌─────────┐ │ │ Engine  │ │ │ Mining  │ │ │ sqlc    │ │ │ Live Logs   │ │
+│ │Metrics  │ │ │ Adaptive│ │ │ Sim     │ │ │ Queries │ │ │ Statistics  │ │
+│ │Storage  │ │ │ Diff    │ │ │ Control │ │ │ CRUD    │ │ │ Monitoring  │ │
+│ └─────────┘ │ └─────────┘ │ └─────────┘ │ └─────────┘ │ └─────────────┘ │
+└─────────────┴─────────────┴─────────────┴─────────────┴─────────────────┘
 ```
 
 ## 🔧 Configuration
@@ -206,8 +209,13 @@ world-of-wisdom/
 ├── cmd/                    # Executables
 │   ├── server/            # TCP server (Argon2 PoW)
 │   ├── client/            # Test client
-│   └── webserver/         # WebSocket API
+│   ├── webserver/         # WebSocket API
+│   └── apiserver/         # REST API server
 ├── internal/              # Application logic
+│   ├── server/            # TCP server implementation
+│   ├── webserver/         # WebSocket server implementation
+│   └── apiserver/         # REST API implementation
+├── api/db/                # Generated database code (sqlc)
 ├── pkg/                   # Libraries
 │   ├── pow/               # PoW algorithms (SHA-256 + Argon2)
 │   ├── database/          # PostgreSQL/Redis integration
@@ -217,7 +225,10 @@ world-of-wisdom/
 │   ├── src/components/    # Enhanced UI components
 │   ├── src/hooks/         # WebSocket with reconnection
 │   └── src/utils/         # Persistence utilities
-├── db/migrations/         # Database schema
+├── db/                    # Database layer
+│   ├── migrations/        # Database schema
+│   └── queries/           # SQL queries for sqlc
+├── sqlc.yaml              # sqlc configuration
 ├── docker-compose.yml     # Full stack deployment
 └── STABILITY-IMPROVEMENTS.md # Technical details
 ```
@@ -229,6 +240,7 @@ world-of-wisdom/
 - ✅ **Frontend Stability**: Persistent stats, enhanced logs, auto-recovery
 - ✅ **Resource Safety**: Conservative limits prevent crashes under extreme load
 - ✅ **Live Metrics**: Real-time difficulty tracking and updates
+- ✅ **REST API Gateway**: Type-safe database operations with comprehensive endpoints
 - ✅ **Production Ready**: Restart policies, health checks, monitoring
 
 ### 🖼️ Frontend Demo
