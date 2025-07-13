@@ -18,6 +18,7 @@ func main() {
 		timeout     = flag.Duration("timeout", 30*time.Second, "Client timeout")
 		adaptive    = flag.Bool("adaptive", true, "Enable adaptive difficulty")
 		metricsPort = flag.String("metrics-port", ":2112", "Prometheus metrics port")
+		algorithm   = flag.String("algorithm", "argon2", "PoW algorithm: sha256 or argon2")
 	)
 	flag.Parse()
 
@@ -27,6 +28,7 @@ func main() {
 		Timeout:      *timeout,
 		AdaptiveMode: *adaptive,
 		MetricsPort:  *metricsPort,
+		Algorithm:    *algorithm,
 	}
 
 	srv, err := server.NewServer(cfg)

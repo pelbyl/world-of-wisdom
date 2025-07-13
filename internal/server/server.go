@@ -28,6 +28,9 @@ type Server struct {
 	connectionRate int64
 	lastAdjustment time.Time
 	adaptiveMode   bool
+	
+	// PoW algorithm selection
+	algorithm      string // "sha256" or "argon2"
 }
 
 type Config struct {
@@ -36,6 +39,7 @@ type Config struct {
 	Timeout      time.Duration
 	AdaptiveMode bool
 	MetricsPort  string
+	Algorithm    string // "sha256" or "argon2"
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -53,6 +57,15 @@ func NewServer(cfg Config) (*Server, error) {
 	// Initialize metrics
 	metrics.UpdateCurrentDifficulty(cfg.Difficulty)
 
+	// Default to argon2 if not specified
+	algorithm := cfg.Algorithm
+	if algorithm == "" {
+		algorithm = "argon2"
+	}
+	if algorithm != "sha256" && algorithm != "argon2" {
+		return nil, fmt.Errorf("invalid algorithm: %s (must be sha256 or argon2)", algorithm)
+	}
+
 	return &Server{
 		listener:       listener,
 		quoteProvider:  wisdom.NewQuoteProvider(),
@@ -62,6 +75,7 @@ func NewServer(cfg Config) (*Server, error) {
 		solveTimes:     make([]time.Duration, 0, 100),
 		lastAdjustment: time.Now(),
 		adaptiveMode:   cfg.AdaptiveMode,
+		algorithm:      algorithm,
 	}, nil
 }
 
@@ -107,14 +121,36 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.trackConnection()
 
 	difficulty := s.getDifficulty()
-	challenge, err := pow.GenerateChallenge(difficulty)
-	if err != nil {
-		log.Printf("Failed to generate challenge: %v", err)
-		conn.Write([]byte("Error: Failed to generate challenge\n"))
-		return
+	
+	// Generate challenge based on algorithm
+	var challengeStr string
+	var verifySolution func(string) bool
+	
+	if s.algorithm == "sha256" {
+		challenge, err := pow.GenerateChallenge(difficulty)
+		if err != nil {
+			log.Printf("Failed to generate challenge: %v", err)
+			conn.Write([]byte("Error: Failed to generate challenge\n"))
+			return
+		}
+		challengeStr = challenge.String()
+		verifySolution = func(response string) bool {
+			return pow.VerifyPoW(challenge.Seed, response, challenge.Difficulty)
+		}
+	} else {
+		challenge, err := pow.GenerateArgon2Challenge(difficulty)
+		if err != nil {
+			log.Printf("Failed to generate Argon2 challenge: %v", err)
+			conn.Write([]byte("Error: Failed to generate challenge\n"))
+			return
+		}
+		challengeStr = challenge.String()
+		verifySolution = func(response string) bool {
+			return pow.VerifyArgon2PoW(challenge, response)
+		}
 	}
 
-	_, err = conn.Write([]byte(challenge.String() + "\n"))
+	_, err := conn.Write([]byte(challengeStr + "\n"))
 	if err != nil {
 		log.Printf("Failed to send challenge to %s: %v", clientAddr, err)
 		return
@@ -130,8 +166,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 	response := strings.TrimSpace(scanner.Text())
 	solveTime := time.Since(solveStart)
 
-	if pow.VerifyPoW(challenge.Seed, response, challenge.Difficulty) {
-		log.Printf("Client %s solved the challenge in %v", clientAddr, solveTime)
+	if verifySolution(response) {
+		log.Printf("Client %s solved the %s challenge in %v", clientAddr, s.algorithm, solveTime)
 		s.recordSolveTime(solveTime)
 		
 		// Record metrics
@@ -141,7 +177,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		quote := s.quoteProvider.GetRandomQuote()
 		conn.Write([]byte(quote + "\n"))
 	} else {
-		log.Printf("Client %s failed the challenge", clientAddr)
+		log.Printf("Client %s failed the %s challenge", clientAddr, s.algorithm)
 		
 		// Record metrics
 		metrics.RecordPuzzleFailed(difficulty)

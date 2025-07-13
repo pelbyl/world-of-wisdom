@@ -15,10 +15,11 @@ func main() {
 	var (
 		port = flag.String("port", ":8081", "Web server port")
 		tcpServer = flag.String("tcp-server", "localhost:8080", "TCP server address")
+		algorithm = flag.String("algorithm", "argon2", "PoW algorithm: sha256 or argon2")
 	)
 	flag.Parse()
 
-	server := webserver.NewWebServer(*tcpServer)
+	server := webserver.NewWebServer(*tcpServer, *algorithm)
 
 	http.HandleFunc("/ws", server.HandleWebSocket)
 	http.HandleFunc("/api/stats", server.HandleStats)
