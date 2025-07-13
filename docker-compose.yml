@@ -155,7 +155,9 @@ services:
           memory: 256M
 
   client1:
-    image: world-of-wisdom-client
+    build:
+      context: .
+      dockerfile: Dockerfile.client
     depends_on:
       - server
     command: ["-server", "server:8080", "-attempts", "5"]
@@ -163,7 +165,9 @@ services:
       - wisdom-net
 
   client2:
-    image: world-of-wisdom-client
+    build:
+      context: .
+      dockerfile: Dockerfile.client
     depends_on:
       - server
     command: ["-server", "server:8080", "-attempts", "3"]

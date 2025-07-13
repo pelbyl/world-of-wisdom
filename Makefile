@@ -1,4 +1,4 @@
-.PHONY: build test run-server run-client run-webserver run-web dev docker-build docker-run clean rebuild
+.PHONY: build test run-server run-client run-webserver run-web dev docker-build docker-run clean clean-all rebuild
 
 build:
 	mkdir -p bin
@@ -41,8 +41,29 @@ clean:
 	docker-compose down
 	docker rmi world-of-wisdom-server world-of-wisdom-client world-of-wisdom-webserver world-of-wisdom-web || true
 
-re-run:
-	docker-compose down -v --remove-orphans
+clean-all:
+	@echo "🧹 Starting full project cleanup..."
+	@echo "Stopping all containers..."
+	docker-compose down -v --remove-orphans || true
+	docker-compose -f docker-compose.db.yml down -v --remove-orphans || true
+	@echo "Removing all project volumes..."
+	docker volume rm wisdom-data postgres_data redis_data || true
+	@echo "Pruning all unused volumes..."
 	docker volume prune -f
+	@echo "Removing all project images..."
+	docker rmi world-of-wisdom-server world-of-wisdom-client world-of-wisdom-webserver world-of-wisdom-web world-of-wisdom-apiserver || true
+	@echo "Pruning all unused images..."
+	docker image prune -f
+	@echo "Removing all unused containers..."
+	docker container prune -f
+	@echo "Removing all unused networks..."
+	docker network prune -f
+	@echo "✅ Full cleanup complete!"
+
+re-run: clean-all
+	@echo "🚀 Starting fresh project build and run..."
+	@echo "Building all Docker images..."
 	docker-compose build --no-cache
+	@echo "Starting services..."
 	docker-compose up -d --remove-orphans
+	@echo "✅ Project restarted with clean state!"

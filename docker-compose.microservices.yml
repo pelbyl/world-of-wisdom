@@ -1,0 +1,129 @@
+# Microservices configuration overlay
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.microservices.yml up
+
+services:
+  # Service Registry (standalone)
+  service-registry:
+    build:
+      context: .
+      dockerfile: Dockerfile.service-registry
+    ports:
+      - "8083:8083"
+    environment:
+      - SERVICE_ADDRESS=service-registry
+      - REGISTRY_PORT=8083
+    networks:
+      - wisdom-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  # Enhanced TCP Server with service discovery
+  server:
+    environment:
+      - SERVICE_REGISTRY_URL=http://service-registry:8083
+      - SERVICE_ID=tcp-server-1
+      - SERVICE_TYPE=tcp-server
+    depends_on:
+      service-registry:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Enhanced Web Server with service discovery  
+  webserver:
+    environment:
+      - SERVICE_REGISTRY_URL=http://service-registry:8083
+      - SERVICE_ID=web-server-1
+      - SERVICE_TYPE=web-server
+    depends_on:
+      service-registry:
+        condition: service_healthy
+      server:
+        condition: service_started
+
+  # Enhanced API Server with service discovery
+  apiserver:
+    environment:
+      - SERVICE_REGISTRY_URL=http://service-registry:8083
+      - SERVICE_ID=api-server-1
+      - SERVICE_TYPE=api-server
+    depends_on:
+      service-registry:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Load Balancer/Gateway
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "8084:8084"
+    environment:
+      - SERVICE_REGISTRY_URL=http://service-registry:8083
+      - SERVICE_ID=gateway-1
+      - SERVICE_TYPE=load-balancer
+      - GATEWAY_PORT=8084
+    depends_on:
+      service-registry:
+        condition: service_healthy
+    networks:
+      - wisdom-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+
+  # Enhanced Web Frontend with gateway discovery
+  web:
+    environment:
+      - REACT_APP_API_URL=http://localhost:8084/api
+      - REACT_APP_WS_URL=ws://localhost:8084/ws
+    depends_on:
+      - gateway
+
+  # Monitoring Service
+  monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.monitor
+    ports:
+      - "8085:8085"
+    environment:
+      - SERVICE_REGISTRY_URL=http://service-registry:8083
+      - SERVICE_ID=monitor-1
+      - MONITOR_PORT=8085
+    depends_on:
+      service-registry:
+        condition: service_healthy
+    networks:
+      - wisdom-net
+    restart: unless-stopped
+
+# Additional volumes for microservices
+volumes:
+  service-registry-data:
+    driver: local
+  gateway-config:
+    driver: local

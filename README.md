@@ -24,6 +24,8 @@ make re-run
 - **💾 Data Persistence**: PostgreSQL/TimescaleDB for metrics, Redis for caching  
 - **📊 Real-time Monitoring**: Interactive React dashboard with live WebSocket updates
 - **🚀 REST API Gateway**: Type-safe database operations with sqlc-generated queries
+- **🔍 Service Discovery**: Microservices architecture with service registry
+- **⚖️ Load Balancing**: Gateway with intelligent request routing
 - **🔄 Auto-Recovery**: Robust error handling with automatic reconnection
 - **📈 Comprehensive Metrics**: Prometheus integration with 10+ metrics
 - **🐳 Production Ready**: Docker deployment with health checks and restart policies
@@ -241,6 +243,8 @@ world-of-wisdom/
 - ✅ **Resource Safety**: Conservative limits prevent crashes under extreme load
 - ✅ **Live Metrics**: Real-time difficulty tracking and updates
 - ✅ **REST API Gateway**: Type-safe database operations with comprehensive endpoints
+- ✅ **OpenAPI Documentation**: Interactive Swagger UI with complete API specs
+- ✅ **Microservices Architecture**: Service discovery, load balancing, and monitoring
 - ✅ **Production Ready**: Restart policies, health checks, monitoring
 
 ### 🖼️ Frontend Demo

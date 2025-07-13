@@ -1,21 +1,35 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-RUN go mod download || true
+# Install build dependencies
+RUN apk add --no-cache git
 
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o client cmd/client/main.go
+# Build the client
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o client ./cmd/client
 
-FROM alpine:latest
+# Final stage
+FROM alpine:3.19
 
+# Install CA certificates
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
+# Copy the binary from builder stage
 COPY --from=builder /app/client .
 
+# Create non-root user
+RUN adduser -D -s /bin/sh clientuser
+USER clientuser
+
+# Default command
 ENTRYPOINT ["./client"]
 CMD ["-server", "server:8080"]
