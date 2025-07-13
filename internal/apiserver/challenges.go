@@ -25,6 +25,16 @@ type UpdateChallengeStatusRequest struct {
 	Status string `json:"status" binding:"required,oneof=pending solving completed failed expired"`
 }
 
+// getChallenges godoc
+// @Summary Get recent challenges
+// @Description Get a list of recent challenges with optional limit
+// @Tags challenges
+// @Accept json
+// @Produce json
+// @Param limit query int false "Limit number of results (default: 50, max: 1000)"
+// @Success 200 {object} map[string]interface{} "List of challenges"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /challenges [get]
 func (s *Server) getChallenges(c *gin.Context) {
 	ctx, cancel := s.contextWithTimeout()
 	defer cancel()
@@ -40,6 +50,17 @@ func (s *Server) getChallenges(c *gin.Context) {
 	s.handleSuccess(c, challenges)
 }
 
+// createChallenge godoc
+// @Summary Create a new challenge
+// @Description Create a new PoW challenge with specified parameters
+// @Tags challenges
+// @Accept json
+// @Produce json
+// @Param challenge body CreateChallengeRequest true "Challenge data"
+// @Success 201 {object} map[string]interface{} "Challenge created successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request body"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /challenges [post]
 func (s *Server) createChallenge(c *gin.Context) {
 	var req CreateChallengeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -100,6 +121,17 @@ func (s *Server) createChallenge(c *gin.Context) {
 	})
 }
 
+// getChallenge godoc
+// @Summary Get challenge by ID
+// @Description Get a specific challenge by its UUID
+// @Tags challenges
+// @Accept json
+// @Produce json
+// @Param id path string true "Challenge UUID"
+// @Success 200 {object} map[string]interface{} "Challenge details"
+// @Failure 400 {object} map[string]interface{} "Invalid challenge ID"
+// @Failure 404 {object} map[string]interface{} "Challenge not found"
+// @Router /challenges/{id} [get]
 func (s *Server) getChallenge(c *gin.Context) {
 	idStr := c.Param("id")
 	uuid, err := parseUUID(idStr)

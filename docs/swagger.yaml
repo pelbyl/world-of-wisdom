@@ -1,0 +1,220 @@
+basePath: /api/v1
+definitions:
+  apiserver.CreateChallengeRequest:
+    properties:
+      algorithm:
+        enum:
+        - sha256
+        - argon2
+        type: string
+      argon2KeyLen:
+        type: integer
+      argon2Memory:
+        type: integer
+      argon2Threads:
+        type: integer
+      argon2Time:
+        type: integer
+      clientId:
+        type: string
+      difficulty:
+        maximum: 6
+        minimum: 1
+        type: integer
+      seed:
+        type: string
+    required:
+    - algorithm
+    - clientId
+    - difficulty
+    - seed
+    type: object
+  apiserver.CreateSolutionRequest:
+    properties:
+      attempts:
+        minimum: 1
+        type: integer
+      challengeId:
+        type: string
+      hash:
+        type: string
+      nonce:
+        type: string
+      solveTimeMs:
+        minimum: 0
+        type: integer
+      verified:
+        type: boolean
+    required:
+    - attempts
+    - challengeId
+    - hash
+    - nonce
+    - solveTimeMs
+    type: object
+host: localhost:8082
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+    url: https://github.com/yourusername/world-of-wisdom
+  description: REST API for Word of Wisdom PoW server with type-safe database operations
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Word of Wisdom REST API
+  version: "1.0"
+paths:
+  /challenges:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of recent challenges with optional limit
+      parameters:
+      - description: 'Limit number of results (default: 50, max: 1000)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of challenges
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get recent challenges
+      tags:
+      - challenges
+    post:
+      consumes:
+      - application/json
+      description: Create a new PoW challenge with specified parameters
+      parameters:
+      - description: Challenge data
+        in: body
+        name: challenge
+        required: true
+        schema:
+          $ref: '#/definitions/apiserver.CreateChallengeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Challenge created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request body
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new challenge
+      tags:
+      - challenges
+  /challenges/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a specific challenge by its UUID
+      parameters:
+      - description: Challenge UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Challenge details
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid challenge ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Challenge not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get challenge by ID
+      tags:
+      - challenges
+  /solutions:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of recent solutions with optional limit
+      parameters:
+      - description: 'Limit number of results (default: 50, max: 1000)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of solutions
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get recent solutions
+      tags:
+      - solutions
+    post:
+      consumes:
+      - application/json
+      description: Create a new solution for a challenge
+      parameters:
+      - description: Solution data
+        in: body
+        name: solution
+        required: true
+        schema:
+          $ref: '#/definitions/apiserver.CreateSolutionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Solution created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request body
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new solution
+      tags:
+      - solutions
+schemes:
+- http
+- https
+swagger: "2.0"

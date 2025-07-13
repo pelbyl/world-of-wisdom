@@ -22,6 +22,16 @@ type VerifySolutionRequest struct {
 	Verified bool `json:"verified" binding:"required"`
 }
 
+// getSolutions godoc
+// @Summary Get recent solutions
+// @Description Get a list of recent solutions with optional limit
+// @Tags solutions
+// @Accept json
+// @Produce json
+// @Param limit query int false "Limit number of results (default: 50, max: 1000)"
+// @Success 200 {object} map[string]interface{} "List of solutions"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /solutions [get]
 func (s *Server) getSolutions(c *gin.Context) {
 	ctx, cancel := s.contextWithTimeout()
 	defer cancel()
@@ -37,6 +47,17 @@ func (s *Server) getSolutions(c *gin.Context) {
 	s.handleSuccess(c, solutions)
 }
 
+// createSolution godoc
+// @Summary Create a new solution
+// @Description Create a new solution for a challenge
+// @Tags solutions
+// @Accept json
+// @Produce json
+// @Param solution body CreateSolutionRequest true "Solution data"
+// @Success 201 {object} map[string]interface{} "Solution created successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request body"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /solutions [post]
 func (s *Server) createSolution(c *gin.Context) {
 	var req CreateSolutionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

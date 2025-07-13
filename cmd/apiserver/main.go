@@ -1,3 +1,21 @@
+// Package main provides the Word of Wisdom REST API server
+//
+//	@title			Word of Wisdom REST API
+//	@version		1.0
+//	@description	REST API for Word of Wisdom PoW server with type-safe database operations
+//	@termsOfService	http://swagger.io/terms/
+//
+//	@contact.name	API Support
+//	@contact.url	https://github.com/yourusername/world-of-wisdom
+//	@contact.email	support@example.com
+//
+//	@license.name	MIT
+//	@license.url	https://opensource.org/licenses/MIT
+//
+//	@host		localhost:8082
+//	@BasePath	/api/v1
+//
+//	@schemes	http https
 package main
 
 import (
@@ -11,8 +29,11 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	swaggerFiles "github.com/swaggo/files"
 
 	"world-of-wisdom/api/db"
+	_ "world-of-wisdom/docs" // Import generated docs
 	"world-of-wisdom/internal/apiserver"
 	"world-of-wisdom/pkg/config"
 )
@@ -94,7 +115,17 @@ func main() {
 	apiServer := apiserver.New(dbpool, queries)
 	apiServer.SetupRoutes(router)
 
+	// Swagger documentation
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	// Health check endpoint
+	// @Summary Health check
+	// @Description Check if the API server is running
+	// @Tags system
+	// @Accept json
+	// @Produce json
+	// @Success 200 {object} map[string]interface{} "API is healthy"
+	// @Router /health [get]
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":    "healthy",
@@ -106,6 +137,7 @@ func main() {
 
 	// Start server
 	log.Printf("🌟 API server ready at http://localhost%s", *port)
+	log.Printf("📋 OpenAPI/Swagger: http://localhost%s/swagger/index.html", *port)
 	log.Printf("📋 API documentation: http://localhost%s/api/v1/docs", *port)
 
 	if err := router.Run(*port); err != nil {
