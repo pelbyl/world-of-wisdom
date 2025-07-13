@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: timescale/timescaledb:2.11.2-pg15
+    container_name: wisdom-postgres
+    environment:
+      POSTGRES_DB: wisdom
+      POSTGRES_USER: wisdom
+      POSTGRES_PASSWORD: wisdom123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - wisdom-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wisdom -d wisdom"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wisdom-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - wisdom-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  wisdom-network:
+    driver: bridge
