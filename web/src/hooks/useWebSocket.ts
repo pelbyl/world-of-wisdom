@@ -6,6 +6,8 @@ interface WebSocketState {
   isError: boolean
   reconnectAttempts: number
   lastError?: string
+  isHighLoad?: boolean
+  degradedMode?: boolean
 }
 
 export const useWebSocket = (url: string) => {
@@ -15,12 +17,16 @@ export const useWebSocket = (url: string) => {
     isConnected: false,
     isConnecting: false,
     isError: false,
-    reconnectAttempts: 0
+    reconnectAttempts: 0,
+    isHighLoad: false,
+    degradedMode: false
   })
   const ws = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const degradedModeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const maxReconnectAttempts = 10
   const baseReconnectDelay = 1000
+  const degradedModeDelay = 10000 // Switch to degraded mode after 10 seconds of failures
 
   const connect = useCallback(() => {
     if (connectionState.reconnectAttempts >= maxReconnectAttempts) {
@@ -53,11 +59,20 @@ export const useWebSocket = (url: string) => {
       ws.current.onopen = () => {
         console.log('WebSocket connected successfully')
         setReadyState(1) // OPEN
+        
+        // Clear degraded mode timer if connection successful
+        if (degradedModeTimeoutRef.current) {
+          clearTimeout(degradedModeTimeoutRef.current)
+          degradedModeTimeoutRef.current = null
+        }
+        
         setConnectionState({
           isConnected: true,
           isConnecting: false,
           isError: false,
-          reconnectAttempts: 0
+          reconnectAttempts: 0,
+          degradedMode: false,
+          isHighLoad: false
         })
       }
 
@@ -70,9 +85,21 @@ export const useWebSocket = (url: string) => {
           isConnecting: false
         }))
 
+        // Start degraded mode timer if repeated failures
+        if (connectionState.reconnectAttempts >= 3 && !degradedModeTimeoutRef.current) {
+          degradedModeTimeoutRef.current = setTimeout(() => {
+            console.log('🔥 Switching to degraded mode - using API polling instead of WebSocket')
+            setConnectionState(prev => ({
+              ...prev,
+              degradedMode: true,
+              isHighLoad: true
+            }))
+          }, degradedModeDelay)
+        }
+
         // Only attempt to reconnect if it wasn't a clean close
         if (event.code !== 1000 && connectionState.reconnectAttempts < maxReconnectAttempts) {
-          const delay = baseReconnectDelay * Math.pow(2, connectionState.reconnectAttempts)
+          const delay = Math.min(baseReconnectDelay * Math.pow(1.5, connectionState.reconnectAttempts), 30000) // Cap at 30s
           console.log(`Attempting to reconnect in ${delay}ms (attempt ${connectionState.reconnectAttempts + 1}/${maxReconnectAttempts})`)
           
           reconnectTimeoutRef.current = setTimeout(() => {
@@ -82,6 +109,13 @@ export const useWebSocket = (url: string) => {
             }))
             connect()
           }, delay)
+        } else if (connectionState.reconnectAttempts >= maxReconnectAttempts) {
+          console.log('🔥 Max reconnection attempts reached - switching to API-only mode')
+          setConnectionState(prev => ({
+            ...prev,
+            degradedMode: true,
+            isError: true
+          }))
         }
       }
 
@@ -115,9 +149,12 @@ export const useWebSocket = (url: string) => {
     connect()
 
     return () => {
-      // Clear reconnection timeout
+      // Clear all timeouts
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+      }
+      if (degradedModeTimeoutRef.current) {
+        clearTimeout(degradedModeTimeoutRef.current)
       }
       
       // Close WebSocket connection

@@ -199,12 +199,31 @@ type ConnectionStat struct {
 	AvgTotalSolveTimeMs    float64          `json:"avg_total_solve_time_ms"`
 }
 
+type Log struct {
+	ID        pgtype.UUID        `json:"id"`
+	Timestamp pgtype.Timestamptz `json:"timestamp"`
+	Level     string             `json:"level"`
+	Message   string             `json:"message"`
+	Icon      pgtype.Text        `json:"icon"`
+	Metadata  []byte             `json:"metadata"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Metric struct {
 	Time           pgtype.Timestamptz `json:"time"`
 	MetricName     string             `json:"metric_name"`
 	MetricValue    float64            `json:"metric_value"`
 	Labels         []byte             `json:"labels"`
 	ServerInstance pgtype.Text        `json:"server_instance"`
+}
+
+type RecentLog struct {
+	ID        pgtype.UUID        `json:"id"`
+	Timestamp pgtype.Timestamptz `json:"timestamp"`
+	Level     string             `json:"level"`
+	Message   string             `json:"message"`
+	Icon      pgtype.Text        `json:"icon"`
+	Metadata  []byte             `json:"metadata"`
 }
 
 type Solution struct {

@@ -1,4 +1,4 @@
-import { Stack, Text, ScrollArea, Group, Badge, Card, Pagination, Center, Button } from '@mantine/core'
+import { Stack, Text, ScrollArea, Group, Badge, Card, Pagination, Center, Button, Select, TextInput, ActionIcon } from '@mantine/core'
 import { LogMessage } from '../types'
 import { useEffect, useRef, useState, useMemo } from 'react'
 
@@ -12,20 +12,44 @@ export function LogsPanel({ logs }: Props) {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [autoScroll, setAutoScroll] = useState(true)
+  const [levelFilter, setLevelFilter] = useState<string | null>(null)
+  const [searchFilter, setSearchFilter] = useState('')
 
-  // Sort logs with latest first
-  const sortedLogs = useMemo(() => {
-    return [...logs].sort((a, b) => b.timestamp - a.timestamp)
-  }, [logs])
+  // Filter and sort logs
+  const filteredLogs = useMemo(() => {
+    let filtered = [...logs]
+    
+    // Filter by level
+    if (levelFilter && levelFilter !== 'all') {
+      filtered = filtered.filter(log => log.level === levelFilter)
+    }
+    
+    // Filter by search term
+    if (searchFilter.trim()) {
+      const searchTerm = searchFilter.toLowerCase().trim()
+      filtered = filtered.filter(log => 
+        log.message.toLowerCase().includes(searchTerm) ||
+        log.level.toLowerCase().includes(searchTerm)
+      )
+    }
+    
+    // Sort with latest first
+    return filtered.sort((a, b) => b.timestamp - a.timestamp)
+  }, [logs, levelFilter, searchFilter])
 
   // Paginated logs
   const paginatedLogs = useMemo(() => {
     const start = (currentPage - 1) * LOGS_PER_PAGE
     const end = start + LOGS_PER_PAGE
-    return sortedLogs.slice(start, end)
-  }, [sortedLogs, currentPage])
+    return filteredLogs.slice(start, end)
+  }, [filteredLogs, currentPage])
 
-  const totalPages = Math.ceil(sortedLogs.length / LOGS_PER_PAGE)
+  const totalPages = Math.ceil(filteredLogs.length / LOGS_PER_PAGE)
+  
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [levelFilter, searchFilter])
 
   // Reset to first page when new logs arrive (if on first page)
   useEffect(() => {
@@ -70,31 +94,87 @@ export function LogsPanel({ logs }: Props) {
 
   return (
     <Stack gap="md">
-      {/* Controls */}
-      <Group justify="space-between" align="center">
-        <Text size="sm" c="dimmed">
-          {sortedLogs.length} logs total • Page {currentPage} of {totalPages}
-        </Text>
-        <Group gap="xs">
-          <Button
+      {/* Filters */}
+      <Stack gap="sm">
+        <Group gap="md" align="end">
+          <Select
+            label="Filter by Level"
+            placeholder="All levels"
             size="xs"
-            variant={autoScroll ? "filled" : "light"}
-            onClick={() => setAutoScroll(!autoScroll)}
-            color={autoScroll ? "green" : "gray"}
-          >
-            {autoScroll ? "🔄 Live" : "⏸️ Paused"}
-          </Button>
-          {currentPage !== 1 && (
+            style={{ width: 120 }}
+            data={[
+              { value: 'all', label: 'All' },
+              { value: 'info', label: '📘 Info' },
+              { value: 'success', label: '✅ Success' },
+              { value: 'warning', label: '⚠️ Warning' },
+              { value: 'error', label: '❌ Error' },
+            ]}
+            value={levelFilter}
+            onChange={setLevelFilter}
+            clearable
+          />
+          <TextInput
+            label="Search"
+            placeholder="Search logs..."
+            size="xs"
+            style={{ flex: 1, maxWidth: 200 }}
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            rightSection={
+              searchFilter && (
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  onClick={() => setSearchFilter('')}
+                >
+                  ✕
+                </ActionIcon>
+              )
+            }
+          />
+        </Group>
+        
+        {/* Controls */}
+        <Group justify="space-between" align="center">
+          <Text size="sm" c="dimmed">
+            {filteredLogs.length} logs 
+            {logs.length !== filteredLogs.length && ` (filtered from ${logs.length})`} 
+            • Page {currentPage} of {totalPages}
+          </Text>
+          <Group gap="xs">
             <Button
               size="xs"
-              variant="light"
-              onClick={() => setCurrentPage(1)}
+              variant={autoScroll ? "filled" : "light"}
+              onClick={() => setAutoScroll(!autoScroll)}
+              color={autoScroll ? "green" : "gray"}
             >
-              📄 Latest
+              {autoScroll ? "🔄 Live" : "⏸️ Paused"}
             </Button>
-          )}
+            {currentPage !== 1 && (
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() => setCurrentPage(1)}
+              >
+                📄 Latest
+              </Button>
+            )}
+            {(levelFilter || searchFilter) && (
+              <Button
+                size="xs"
+                variant="light"
+                color="red"
+                onClick={() => {
+                  setLevelFilter(null)
+                  setSearchFilter('')
+                }}
+              >
+                🗑️ Clear Filters
+              </Button>
+            )}
+          </Group>
         </Group>
-      </Group>
+      </Stack>
 
       {/* Logs */}
       <ScrollArea h={600} ref={scrollAreaRef}>
