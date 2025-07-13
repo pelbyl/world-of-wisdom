@@ -11,6 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countDifficultyAdjustments = `-- name: CountDifficultyAdjustments :one
+SELECT COUNT(*) as adjustment_count
+FROM metrics 
+WHERE metric_name = 'difficulty_adjustment'
+  AND time >= NOW() - INTERVAL '1 hour'
+`
+
+func (q *Queries) CountDifficultyAdjustments(ctx context.Context, db DBTX) (int64, error) {
+	row := db.QueryRow(ctx, countDifficultyAdjustments)
+	var adjustment_count int64
+	err := row.Scan(&adjustment_count)
+	return adjustment_count, err
+}
+
 const getMetricHistory = `-- name: GetMetricHistory :many
 SELECT 
     time_bucket('1 minute', time) AS bucket,

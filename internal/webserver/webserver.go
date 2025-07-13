@@ -627,7 +627,7 @@ func (ws *WebServer) startContinuousMiningWithConfig(configMap map[string]interf
 		MaxMiners:       ws.maxConcurrency, // Use detected CPU capacity
 		Duration:        0, // infinite
 		HighPerformance: false,
-		MaxDifficulty:   6, // Higher than default
+		MaxDifficulty:   6, // Maximum supported difficulty
 		CPUIntensive:    false,
 	}
 
@@ -665,14 +665,14 @@ func (ws *WebServer) startContinuousMiningWithConfig(configMap map[string]interf
 	// High-performance overrides
 	if config.HighPerformance {
 		config.MaxMiners = ws.maxConcurrency * 2 // Push beyond normal limits
-		config.MaxDifficulty = 8 // Maximum PoW difficulty
+		config.MaxDifficulty = 6 // Maximum supported PoW difficulty
 		config.IntensityStep = 10 // Faster scaling
 	}
 	
 	// CPU-intensive overrides  
 	if config.CPUIntensive {
 		config.MaxMiners = ws.maxConcurrency * 3 // 3x normal capacity
-		config.MaxDifficulty = 8
+		config.MaxDifficulty = 6 // Maximum supported PoW difficulty
 		runtime.GOMAXPROCS(ws.cpuCores) // Use all cores
 	}
 
@@ -1142,24 +1142,28 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 		currentDifficulty := ws.stats.CurrentDifficulty
 		// Adaptive difficulty based on network intensity and config
 		oldDifficulty := currentDifficulty
+		maxAllowedDifficulty := min(config.MaxDifficulty, 6) // Never exceed 6 (PoW constraint)
 		
-		if ws.miningIntensity >= 3 && config.MaxDifficulty > currentDifficulty {
+		if ws.miningIntensity >= 3 && currentDifficulty < maxAllowedDifficulty {
 			// Increase difficulty during high load
-			currentDifficulty = min(config.MaxDifficulty, currentDifficulty+1)
+			currentDifficulty = min(maxAllowedDifficulty, currentDifficulty+1)
 			ws.stats.CurrentDifficulty = currentDifficulty
 			log.Printf("🔧 Difficulty increased: %d → %d (intensity %d, configured mode)", oldDifficulty, currentDifficulty, ws.miningIntensity)
+			ws.recordDifficultyAdjustment("increase", oldDifficulty, currentDifficulty)
 		} else if ws.miningIntensity <= 1 && currentDifficulty > 1 && ws.activeMinerCount < 5 {
 			// Decrease difficulty during low load
 			currentDifficulty = max(1, currentDifficulty-1)
 			ws.stats.CurrentDifficulty = currentDifficulty
 			log.Printf("🔧 Difficulty decreased: %d → %d (intensity %d, low load)", oldDifficulty, currentDifficulty, ws.miningIntensity)
+			ws.recordDifficultyAdjustment("decrease", oldDifficulty, currentDifficulty)
 		}
 		if config.HighPerformance || config.CPUIntensive {
-			newDifficulty := min(config.MaxDifficulty, currentDifficulty+2)
+			newDifficulty := min(maxAllowedDifficulty, currentDifficulty+2)
 			if newDifficulty != currentDifficulty {
 				ws.stats.CurrentDifficulty = newDifficulty
 				currentDifficulty = newDifficulty
-				log.Printf("🔧 Difficulty boosted to %d (high performance mode)", currentDifficulty)
+				log.Printf("🔧 Difficulty boosted: %d → %d (high performance mode)", oldDifficulty, currentDifficulty)
+				ws.recordDifficultyAdjustment("boost", oldDifficulty, currentDifficulty)
 			}
 		}
 		ws.mu.Unlock()
@@ -1319,20 +1323,22 @@ func (ws *WebServer) simulateRealisticMiner() {
 		// Generate challenge with adaptive difficulty based on network intensity
 		ws.mu.Lock()
 		currentDifficulty := ws.stats.CurrentDifficulty
-		// Adaptive difficulty based on network intensity (default max difficulty 6)
-		maxDifficulty := 6
+		// Adaptive difficulty based on network intensity (max difficulty 6)
+		maxAllowedDifficulty := 6 // PoW constraint
 		oldDifficulty := currentDifficulty
 		
-		if ws.miningIntensity >= 3 && maxDifficulty > currentDifficulty {
+		if ws.miningIntensity >= 3 && currentDifficulty < maxAllowedDifficulty {
 			// Increase difficulty during high load
-			currentDifficulty = min(maxDifficulty, currentDifficulty+1)
+			currentDifficulty = min(maxAllowedDifficulty, currentDifficulty+1)
 			ws.stats.CurrentDifficulty = currentDifficulty
 			log.Printf("🔧 Difficulty increased: %d → %d (intensity %d, realistic mode)", oldDifficulty, currentDifficulty, ws.miningIntensity)
+			ws.recordDifficultyAdjustment("increase", oldDifficulty, currentDifficulty)
 		} else if ws.miningIntensity <= 1 && currentDifficulty > 1 && ws.activeMinerCount < 5 {
 			// Decrease difficulty during low load
 			currentDifficulty = max(1, currentDifficulty-1)
 			ws.stats.CurrentDifficulty = currentDifficulty
 			log.Printf("🔧 Difficulty decreased: %d → %d (intensity %d, low load)", oldDifficulty, currentDifficulty, ws.miningIntensity)
+			ws.recordDifficultyAdjustment("decrease", oldDifficulty, currentDifficulty)
 		}
 		ws.mu.Unlock()
 		
@@ -1782,10 +1788,60 @@ func extractMetricValue(line string) float64 {
 	return value
 }
 
+// recordDifficultyAdjustment records a difficulty adjustment to the database
+func (ws *WebServer) recordDifficultyAdjustment(direction string, oldDifficulty, newDifficulty int) {
+	if ws.queries != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		
+		labels := map[string]interface{}{
+			"direction": direction,
+			"old_difficulty": oldDifficulty,
+			"new_difficulty": newDifficulty,
+			"algorithm": ws.algorithm,
+		}
+		
+		labelsJSON, _ := json.Marshal(labels)
+		
+		params := db.RecordMetricParams{
+			MetricName:     "difficulty_adjustment",
+			MetricValue:    1.0,
+			Labels:         labelsJSON,
+			ServerInstance: pgtype.Text{String: "webserver", Valid: true},
+		}
+		
+		err := ws.queries.RecordMetric(ctx, ws.db, params)
+		if err != nil {
+			log.Printf("Failed to record difficulty adjustment: %v", err)
+		}
+	}
+}
+
+// getDifficultyAdjustmentCount retrieves the count of difficulty adjustments in the last hour
+func (ws *WebServer) getDifficultyAdjustmentCount() int64 {
+	if ws.queries == nil {
+		return 0
+	}
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	count, err := ws.queries.CountDifficultyAdjustments(ctx, ws.db)
+	if err != nil {
+		log.Printf("Failed to get difficulty adjustment count: %v", err)
+		return 0
+	}
+	
+	return count
+}
+
 func (ws *WebServer) startMetricsBroadcast() {
 	ticker := time.NewTicker(2 * time.Second)
 	go func() {
 		for range ticker.C {
+			// Fetch difficulty adjustment count from database
+			difficultyAdjustments := ws.getDifficultyAdjustmentCount()
+			
 			// Fetch and broadcast Prometheus metrics
 			metrics := &MetricsData{
 				Timestamp:         time.Now().UnixMilli(),
@@ -1795,7 +1851,7 @@ func (ws *WebServer) startMetricsBroadcast() {
 				PuzzlesFailedTotal: 0,
 				AverageSolveTime:   ws.stats.AverageSolveTime,
 				ConnectionRate:     0,
-				DifficultyAdjustments: 0,
+				DifficultyAdjustments: float64(difficultyAdjustments),
 				ActiveConnections: float64(len(ws.connections)),
 			}
 

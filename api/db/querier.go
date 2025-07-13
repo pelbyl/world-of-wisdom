@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CountDifficultyAdjustments(ctx context.Context, db DBTX) (int64, error)
 	CountLogsByLevel(ctx context.Context, db DBTX) ([]CountLogsByLevelRow, error)
 	CreateBlock(ctx context.Context, db DBTX, arg CreateBlockParams) (Block, error)
 	CreateChallenge(ctx context.Context, db DBTX, arg CreateChallengeParams) (Challenge, error)
