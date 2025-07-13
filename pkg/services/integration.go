@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -86,17 +85,17 @@ func (s *ServiceIntegration) GetInstance() *ServiceInstance {
 
 // CallAPI makes a call to the API service
 func (s *ServiceIntegration) CallAPI(ctx context.Context, method, path string, body interface{}, result interface{}) error {
-	return s.client.CallServiceJSON(ctx, ServiceTypeAPI, method, path, body, result)
+	return s.client.CallServiceJSON(ctx, ServiceTypeAPIServer, method, path, body, result)
 }
 
 // CallTCP makes a call to the TCP service
 func (s *ServiceIntegration) CallTCP(ctx context.Context, method, path string, body interface{}, result interface{}) error {
-	return s.client.CallServiceJSON(ctx, ServiceTypeTCP, method, path, body, result)
+	return s.client.CallServiceJSON(ctx, ServiceTypeTCPServer, method, path, body, result)
 }
 
 // CallWeb makes a call to the Web service
 func (s *ServiceIntegration) CallWeb(ctx context.Context, method, path string, body interface{}, result interface{}) error {
-	return s.client.CallServiceJSON(ctx, ServiceTypeWeb, method, path, body, result)
+	return s.client.CallServiceJSON(ctx, ServiceTypeWebServer, method, path, body, result)
 }
 
 // UpdateMetadata updates this service's metadata
@@ -146,7 +145,7 @@ func getLocalIP() (string, error) {
 func (s *ServiceIntegration) DiscoverServices() {
 	log.Printf("🔍 Discovering available services...")
 	
-	for _, serviceType := range []ServiceType{ServiceTypeTCP, ServiceTypeWeb, ServiceTypeAPI} {
+	for _, serviceType := range []ServiceType{ServiceTypeTCPServer, ServiceTypeWebServer, ServiceTypeAPIServer} {
 		instances := s.registry.Discover(serviceType)
 		if len(instances) > 0 {
 			log.Printf("  📡 %s: %d instances", serviceType, len(instances))
