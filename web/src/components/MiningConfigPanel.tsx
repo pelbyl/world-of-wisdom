@@ -16,14 +16,13 @@ import {
   IconPlayerPlay, 
   IconPlayerStop, 
   IconSettings,
-  IconCpu,
   IconUsers,
   IconClock,
   IconBolt,
   IconWifi,
   IconWifiOff
 } from '@tabler/icons-react'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import DemoModeButton from './DemoModeButton'
 
 interface MiningConfig {
@@ -77,7 +76,7 @@ export function MiningConfigPanel({
 
   const [showAdvanced, setShowAdvanced] = useState(false)
 
-  const handleQuickStart = (preset: 'demo' | 'stress' | 'ddos' | 'extreme') => {
+  const handleQuickStart = (preset: 'demo' | 'stress' | 'realistic') => {
     let quickConfig: MiningConfig
     
     switch (preset) {
@@ -102,39 +101,25 @@ export function MiningConfigPanel({
           intensityStep: 15,
           autoScale: true,
           minMiners: 5,
-          maxMiners: 20,
+          maxMiners: 15,
           duration: 120,
           highPerformance: false,
           maxDifficulty: 5,
           cpuIntensive: false
         }
         break
-      case 'ddos':
+      case 'realistic':
         quickConfig = {
-          initialIntensity: 3,
-          maxIntensity: 4,
-          intensityStep: 10,
-          autoScale: false,
-          minMiners: 15,
-          maxMiners: 30,
-          duration: 180,
-          highPerformance: false,
-          maxDifficulty: 6,
-          cpuIntensive: false
-        }
-        break
-      case 'extreme':
-        quickConfig = {
-          initialIntensity: 3,
-          maxIntensity: 4,
-          intensityStep: 10,
+          initialIntensity: 1,
+          maxIntensity: 3,
+          intensityStep: 30,
           autoScale: true,
-          minMiners: 10,
-          maxMiners: 40,
-          duration: 180,
-          highPerformance: true,
-          maxDifficulty: 6,
-          cpuIntensive: true
+          minMiners: 3,
+          maxMiners: 12,
+          duration: 300,
+          highPerformance: false,
+          maxDifficulty: 5,
+          cpuIntensive: false
         }
         break
     }
@@ -163,7 +148,7 @@ export function MiningConfigPanel({
       <Card withBorder p="md">
         <Text size="sm" fw={500} mb="md">🚀 Quick Start Presets</Text>
         <Grid>
-          <Grid.Col span={3}>
+          <Grid.Col span={4}>
             <DemoModeButton
               miningActive={miningActive}
               onStartDemo={() => handleQuickStart('demo')}
@@ -171,47 +156,32 @@ export function MiningConfigPanel({
             />
           </Grid.Col>
           
-          <Grid.Col span={3}>
-            <Tooltip label="Medium load - 5-20 miners, 2 minutes">
+          <Grid.Col span={4}>
+            <Tooltip label="Moderate load - 5-15 miners, 2 minutes, tests adaptive difficulty">
               <Button
                 fullWidth
                 variant="light"
                 color="yellow"
                 leftSection={<IconBolt size={16} />}
                 onClick={() => handleQuickStart('stress')}
-                disabled={miningActive}
+                disabled={miningActive || !connectionState.isConnected || isRecovering}
               >
                 Stress Test
               </Button>
             </Tooltip>
           </Grid.Col>
           
-          <Grid.Col span={3}>
-            <Tooltip label="Heavy load - triggers DDoS protection, 3 minutes">
+          <Grid.Col span={4}>
+            <Tooltip label="Production-like simulation - 3-12 miners, 5 minutes, gradual scaling">
               <Button
                 fullWidth
                 variant="light"
-                color="orange"
+                color="blue"
                 leftSection={<IconUsers size={16} />}
-                onClick={() => handleQuickStart('ddos')}
-                disabled={miningActive}
+                onClick={() => handleQuickStart('realistic')}
+                disabled={miningActive || !connectionState.isConnected || isRecovering}
               >
-                DDoS Demo
-              </Button>
-            </Tooltip>
-          </Grid.Col>
-          
-          <Grid.Col span={3}>
-            <Tooltip label="High performance - 10-40 miners, CPU intensive, 3 minutes">
-              <Button
-                fullWidth
-                variant="light"
-                color="red"
-                leftSection={<IconCpu size={16} />}
-                onClick={() => handleQuickStart('extreme')}
-                disabled={miningActive}
-              >
-                🚀 Extreme
+                Realistic Mode
               </Button>
             </Tooltip>
           </Grid.Col>
@@ -243,7 +213,7 @@ export function MiningConfigPanel({
                   min={1}
                   max={3}
                   value={config.initialIntensity}
-                  onChange={(val) => setConfig({...config, initialIntensity: Number(val)})}
+                  onChange={(val) => setConfig({...config, initialIntensity: Number(val || 1)})}
                   rightSection={
                     <Badge size="xs" color={getIntensityColor(config.initialIntensity)}>
                       {config.initialIntensity}
@@ -258,7 +228,7 @@ export function MiningConfigPanel({
                   min={1}
                   max={4}
                   value={config.maxIntensity}
-                  onChange={(val) => setConfig({...config, maxIntensity: Number(val)})}
+                  onChange={(val) => setConfig({...config, maxIntensity: Number(val || 1)})}
                   rightSection={
                     <Badge size="xs" color={getIntensityColor(config.maxIntensity)}>
                       {config.maxIntensity}
@@ -275,7 +245,7 @@ export function MiningConfigPanel({
                   min={1}
                   max={50}
                   value={config.minMiners}
-                  onChange={(val) => setConfig({...config, minMiners: Number(val)})}
+                  onChange={(val) => setConfig({...config, minMiners: Number(val || 1)})}
                 />
               </Tooltip>
               
@@ -285,7 +255,7 @@ export function MiningConfigPanel({
                   min={1}
                   max={50}
                   value={config.maxMiners}
-                  onChange={(val) => setConfig({...config, maxMiners: Number(val)})}
+                  onChange={(val) => setConfig({...config, maxMiners: Number(val || 1)})}
                 />
               </Tooltip>
             </Group>
@@ -297,7 +267,7 @@ export function MiningConfigPanel({
                   min={5}
                   max={300}
                   value={config.intensityStep}
-                  onChange={(val) => setConfig({...config, intensityStep: Number(val)})}
+                  onChange={(val) => setConfig({...config, intensityStep: Number(val || 5)})}
                   leftSection={<IconClock size={16} />}
                 />
               </Tooltip>
@@ -308,7 +278,7 @@ export function MiningConfigPanel({
                   min={0}
                   max={3600}
                   value={config.duration}
-                  onChange={(val) => setConfig({...config, duration: Number(val)})}
+                  onChange={(val) => setConfig({...config, duration: Number(val || 0)})}
                   leftSection={<IconClock size={16} />}
                 />
               </Tooltip>
@@ -321,7 +291,7 @@ export function MiningConfigPanel({
                   min={1}
                   max={8}
                   value={config.maxDifficulty}
-                  onChange={(val) => setConfig({...config, maxDifficulty: Number(val)})}
+                  onChange={(val) => setConfig({...config, maxDifficulty: Number(val || 1)})}
                   description="Higher = more CPU intensive"
                 />
               </Tooltip>
@@ -332,21 +302,21 @@ export function MiningConfigPanel({
                 label="Auto-Scale Intensity"
                 description="Automatically increase network intensity over time"
                 checked={config.autoScale}
-                onChange={(event) => setConfig({...config, autoScale: event.currentTarget.checked})}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setConfig({...config, autoScale: event.currentTarget.checked})}
               />
               
               <Switch
                 label="High Performance Mode"
                 description="Enable resource-aware scaling for maximum throughput"
                 checked={config.highPerformance}
-                onChange={(event) => setConfig({...config, highPerformance: event.currentTarget.checked})}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setConfig({...config, highPerformance: event.currentTarget.checked})}
               />
               
               <Switch
                 label="CPU Intensive"
                 description="Use maximum CPU resources and higher difficulties"
                 checked={config.cpuIntensive}
-                onChange={(event) => setConfig({...config, cpuIntensive: event.currentTarget.checked})}
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => setConfig({...config, cpuIntensive: event.currentTarget.checked})}
               />
             </Stack>
           </Stack>
