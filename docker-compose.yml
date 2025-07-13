@@ -1,4 +1,41 @@
 services:
+  postgres:
+    image: timescale/timescaledb:2.11.2-pg15
+    container_name: wisdom-postgres
+    environment:
+      POSTGRES_DB: wisdom
+      POSTGRES_USER: wisdom
+      POSTGRES_PASSWORD: wisdom123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - wisdom-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wisdom -d wisdom"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wisdom-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - wisdom-net
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   server:
     build:
       context: .
@@ -6,7 +43,21 @@ services:
     ports:
       - "8080:8080"
       - "2112:2112"
-    command: ["./server", "-difficulty", "2", "-adaptive", "true"]
+    command: ["./server", "-algorithm", "argon2", "-difficulty", "2", "-adaptive", "true"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: wisdom
+      POSTGRES_PASSWORD: wisdom123
+      POSTGRES_DB: wisdom
+      POSTGRES_SSL_MODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     networks:
       - wisdom-net
     # Resource limits for TCP server
@@ -25,9 +76,22 @@ services:
       dockerfile: Dockerfile.webserver
     ports:
       - "8081:8081"
+    command: ["./webserver", "-tcp-server", "server:8080", "-algorithm", "argon2"]
     depends_on:
       - server
-    command: ["./webserver", "-tcp-server", "server:8080"]
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: wisdom
+      POSTGRES_PASSWORD: wisdom123
+      POSTGRES_DB: wisdom
+      POSTGRES_SSL_MODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     networks:
       - wisdom-net
     volumes:
@@ -71,6 +135,10 @@ services:
 
 volumes:
   wisdom-data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
     driver: local
 
 networks:
