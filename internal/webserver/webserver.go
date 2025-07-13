@@ -55,6 +55,7 @@ type WebServer struct {
 	cpuCores          int  // available CPU cores
 	maxConcurrency    int  // resource-based max miners
 	dataDir           string // directory for persistent storage
+	algorithm         string // "sha256" or "argon2"
 }
 
 type Challenge struct {
@@ -146,11 +147,16 @@ type PersistentData struct {
 	Connections      map[string]*ClientConnection `json:"connections"`
 }
 
-func NewWebServer(tcpServerAddr string) *WebServer {
+func NewWebServer(tcpServerAddr string, algorithm string) *WebServer {
 	cpuCores := runtime.NumCPU()
 	maxConcurrency := cpuCores * 10 // 10 miners per CPU core
 	
 	log.Printf("🖥️  Detected %d CPU cores, max concurrency: %d miners", cpuCores, maxConcurrency)
+	
+	// Default to argon2 if not specified
+	if algorithm == "" {
+		algorithm = "argon2"
+	}
 	
 	ws := &WebServer{
 		tcpServerAddr: tcpServerAddr,
@@ -177,6 +183,7 @@ func NewWebServer(tcpServerAddr string) *WebServer {
 		activeMinerCount: 0,
 		cpuCores:         cpuCores,
 		maxConcurrency:   maxConcurrency,
+		algorithm:        algorithm,
 	}
 	
 	// Create data directory and load persistent data
@@ -884,7 +891,7 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 		}
 		ws.mu.RUnlock()
 		
-		challenge, err := pow.GenerateChallenge(currentDifficulty)
+		seed, challengeDifficulty, err := ws.generateChallenge(currentDifficulty)
 		if err != nil {
 			log.Printf("❌ Failed to generate challenge for %s: %v", clientID[:8], err)
 			continue
@@ -892,8 +899,8 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 
 		webChallenge := &Challenge{
 			ID:         fmt.Sprintf("challenge-%d-%d", time.Now().UnixNano(), rand.Intn(1000)),
-			Seed:       challenge.Seed,
-			Difficulty: challenge.Difficulty,
+			Seed:       seed,
+			Difficulty: challengeDifficulty,
 			Timestamp:  time.Now().UnixMilli(),
 			ClientID:   clientID,
 			Status:     "solving",
@@ -915,11 +922,19 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 			Connection: connection,
 		})
 
-		log.Printf("⛏️  Miner %s solving difficulty %d challenge (attempt %d/%d)", clientID[:8], challenge.Difficulty, attempt+1, miningAttempts)
+		log.Printf("⛏️  Miner %s solving difficulty %d challenge (attempt %d/%d)", clientID[:8], challengeDifficulty, attempt+1, miningAttempts)
 		
 		// Mine the challenge
 		start := time.Now()
-		solution, err := pow.SolveChallenge(challenge)
+		var solution string
+		if ws.algorithm == "sha256" {
+			challenge := &pow.Challenge{Seed: seed, Difficulty: challengeDifficulty}
+			solution, err = pow.SolveChallenge(challenge)
+		} else {
+			challenge, _ := pow.GenerateArgon2Challenge(challengeDifficulty)
+			challenge.Seed = seed
+			solution, err = pow.SolveArgon2Challenge(challenge)
+		}
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -928,14 +943,14 @@ func (ws *WebServer) simulateRealisticMinerWithConfig(config MiningConfig) {
 			ws.broadcastLog("error", msg, "❌")
 			webChallenge.Status = "failed"
 		} else {
-			msg := fmt.Sprintf("✅ Miner %s solved challenge in %v (difficulty %d)", clientID[:8], elapsed, challenge.Difficulty)
+			msg := fmt.Sprintf("✅ Miner %s solved challenge in %v (difficulty %d)", clientID[:8], elapsed, challengeDifficulty)
 			log.Printf(msg)
 			ws.broadcastLog("success", msg, "✅")
 			webChallenge.Status = "completed"
 			connection.ChallengesCompleted++
 
 			// Create block
-			ws.createAndBroadcastBlock(webChallenge, solution, challenge, elapsed)
+			ws.createAndBroadcastBlock(webChallenge, solution, seed, challengeDifficulty, elapsed)
 		}
 
 		ws.broadcast(WebSocketMessage{
@@ -1040,7 +1055,7 @@ func (ws *WebServer) simulateRealisticMiner() {
 		}
 		ws.mu.Unlock()
 		
-		challenge, err := pow.GenerateChallenge(currentDifficulty)
+		seed, challengeDifficulty, err := ws.generateChallenge(currentDifficulty)
 		if err != nil {
 			log.Printf("❌ Failed to generate challenge for %s: %v", clientID[:8], err)
 			continue
@@ -1048,8 +1063,8 @@ func (ws *WebServer) simulateRealisticMiner() {
 
 		webChallenge := &Challenge{
 			ID:         fmt.Sprintf("challenge-%d-%d", time.Now().UnixNano(), rand.Intn(1000)),
-			Seed:       challenge.Seed,
-			Difficulty: challenge.Difficulty,
+			Seed:       seed,
+			Difficulty: challengeDifficulty,
 			Timestamp:  time.Now().UnixMilli(),
 			ClientID:   clientID,
 			Status:     "solving",
@@ -1071,11 +1086,19 @@ func (ws *WebServer) simulateRealisticMiner() {
 			Connection: connection,
 		})
 
-		log.Printf("⛏️  Miner %s solving difficulty %d challenge (attempt %d/%d)", clientID[:8], challenge.Difficulty, attempt+1, miningAttempts)
+		log.Printf("⛏️  Miner %s solving difficulty %d challenge (attempt %d/%d)", clientID[:8], challengeDifficulty, attempt+1, miningAttempts)
 		
 		// Mine the challenge
 		start := time.Now()
-		solution, err := pow.SolveChallenge(challenge)
+		var solution string
+		if ws.algorithm == "sha256" {
+			challenge := &pow.Challenge{Seed: seed, Difficulty: challengeDifficulty}
+			solution, err = pow.SolveChallenge(challenge)
+		} else {
+			challenge, _ := pow.GenerateArgon2Challenge(challengeDifficulty)
+			challenge.Seed = seed
+			solution, err = pow.SolveArgon2Challenge(challenge)
+		}
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -1084,14 +1107,14 @@ func (ws *WebServer) simulateRealisticMiner() {
 			ws.broadcastLog("error", msg, "❌")
 			webChallenge.Status = "failed"
 		} else {
-			msg := fmt.Sprintf("✅ Miner %s solved challenge in %v (difficulty %d)", clientID[:8], elapsed, challenge.Difficulty)
+			msg := fmt.Sprintf("✅ Miner %s solved challenge in %v (difficulty %d)", clientID[:8], elapsed, challengeDifficulty)
 			log.Printf(msg)
 			ws.broadcastLog("success", msg, "✅")
 			webChallenge.Status = "completed"
 			connection.ChallengesCompleted++
 
 			// Create block
-			ws.createAndBroadcastBlock(webChallenge, solution, challenge, elapsed)
+			ws.createAndBroadcastBlock(webChallenge, solution, seed, challengeDifficulty, elapsed)
 		}
 
 		ws.broadcast(WebSocketMessage{
@@ -1121,8 +1144,8 @@ func (ws *WebServer) simulateRealisticMiner() {
 	ws.mu.Unlock()
 }
 
-func (ws *WebServer) createAndBroadcastBlock(webChallenge *Challenge, solution string, challenge *pow.Challenge, elapsed time.Duration) {
-	data := challenge.Seed + solution
+func (ws *WebServer) createAndBroadcastBlock(webChallenge *Challenge, solution string, seed string, difficulty int, elapsed time.Duration) {
+	data := seed + solution
 	hash := sha256.Sum256([]byte(data))
 	hashHex := hex.EncodeToString(hash[:])
 
@@ -1224,7 +1247,7 @@ func (ws *WebServer) simulateClient() {
 		Connection: connection,
 	})
 
-	challenge, err := pow.GenerateChallenge(ws.stats.CurrentDifficulty)
+	seed, challengeDifficulty, err := ws.generateChallenge(ws.stats.CurrentDifficulty)
 	if err != nil {
 		log.Printf("Failed to generate challenge: %v", err)
 		return
@@ -1232,8 +1255,8 @@ func (ws *WebServer) simulateClient() {
 
 	webChallenge := &Challenge{
 		ID:         fmt.Sprintf("challenge-%d", time.Now().UnixNano()),
-		Seed:       challenge.Seed,
-		Difficulty: challenge.Difficulty,
+		Seed:       seed,
+		Difficulty: challengeDifficulty,
 		Timestamp:  time.Now().UnixMilli(),
 		ClientID:   clientID,
 		Status:     "solving",
@@ -1255,9 +1278,17 @@ func (ws *WebServer) simulateClient() {
 		Connection: connection,
 	})
 
-	log.Printf("⛏️  Client %s solving difficulty %d challenge...", clientID, challenge.Difficulty)
+	log.Printf("⛏️  Client %s solving difficulty %d challenge...", clientID, challengeDifficulty)
 	start := time.Now()
-	solution, err := pow.SolveChallenge(challenge)
+	var solution string
+	if ws.algorithm == "sha256" {
+		challenge := &pow.Challenge{Seed: seed, Difficulty: challengeDifficulty}
+		solution, err = pow.SolveChallenge(challenge)
+	} else {
+		challenge, _ := pow.GenerateArgon2Challenge(challengeDifficulty)
+		challenge.Seed = seed
+		solution, err = pow.SolveArgon2Challenge(challenge)
+	}
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -1265,12 +1296,12 @@ func (ws *WebServer) simulateClient() {
 		webChallenge.Status = "failed"
 		connection.Status = "disconnected"
 	} else {
-		log.Printf("✅ Client %s solved challenge in %v (difficulty %d)", clientID, elapsed, challenge.Difficulty)
+		log.Printf("✅ Client %s solved challenge in %v (difficulty %d)", clientID, elapsed, challengeDifficulty)
 		webChallenge.Status = "completed"
 		connection.Status = "connected"
 		connection.ChallengesCompleted++
 
-		data := challenge.Seed + solution
+		data := seed + solution
 		hash := sha256.Sum256([]byte(data))
 		hashHex := hex.EncodeToString(hash[:])
 
@@ -1481,6 +1512,38 @@ func (ws *WebServer) startMetricsBroadcast() {
 			})
 		}
 	}()
+}
+
+// generateChallenge creates a challenge using the configured algorithm
+func (ws *WebServer) generateChallenge(difficulty int) (seed string, challengeDifficulty int, err error) {
+	if ws.algorithm == "sha256" {
+		challenge, err := pow.GenerateChallenge(difficulty)
+		if err != nil {
+			return "", 0, err
+		}
+		return challenge.Seed, challenge.Difficulty, nil
+	} else {
+		challenge, err := pow.GenerateArgon2Challenge(difficulty)
+		if err != nil {
+			return "", 0, err
+		}
+		return challenge.Seed, challenge.Difficulty, nil
+	}
+}
+
+// verifyChallenge verifies a challenge solution using the configured algorithm
+func (ws *WebServer) verifyChallenge(seed string, nonce string, difficulty int) bool {
+	if ws.algorithm == "sha256" {
+		return pow.VerifyPoW(seed, nonce, difficulty)
+	} else {
+		// For verification we need to recreate the challenge with same parameters
+		challenge, err := pow.GenerateArgon2Challenge(difficulty)
+		if err != nil {
+			return false
+		}
+		challenge.Seed = seed
+		return pow.VerifyArgon2PoW(challenge, nonce)
+	}
 }
 
 func (ws *WebServer) Start() {
