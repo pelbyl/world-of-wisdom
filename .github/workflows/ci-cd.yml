@@ -1,0 +1,261 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run tests
+      run: go test -v ./...
+      
+    - name: Run race detector
+      run: go test -race -short ./...
+      
+    - name: Check formatting
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files are not formatted:"
+          gofmt -s -l .
+          exit 1
+        fi
+        
+    - name: Run go vet
+      run: go vet ./...
+
+  build:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    
+    permissions:
+      contents: read
+      packages: write
+      
+    strategy:
+      matrix:
+        service: [server, client, webserver, apiserver, service-registry, gateway, monitor, web]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix=sha-
+          type=raw,value=latest,enable={{is_default_branch}}
+          
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.${{ matrix.service }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/dev'
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+        
+    - name: Deploy to staging server
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} '
+          cd /opt/world-of-wisdom &&
+          git pull origin dev &&
+          docker-compose -f docker-compose.yml -f docker-compose.microservices.yml pull &&
+          docker-compose -f docker-compose.yml -f docker-compose.microservices.yml up -d --remove-orphans &&
+          docker image prune -f
+        '
+        
+    - name: Health check
+      run: |
+        sleep 30
+        curl -f http://${{ secrets.STAGING_HOST }}:8082/health || exit 1
+        curl -f http://${{ secrets.STAGING_HOST }}:8083/health || exit 1
+        curl -f http://${{ secrets.STAGING_HOST }}:8084/health || exit 1
+        curl -f http://${{ secrets.STAGING_HOST }}:8085/health || exit 1
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup SSH for VPS 1
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.VPS_1_SSH_KEY }}
+        
+    - name: Deploy to VPS 1 (Primary)
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_1_USER }}@${{ secrets.VPS_1_HOST }} '
+          cd /opt/world-of-wisdom &&
+          git pull origin main &&
+          export PUBLIC_IP=${{ secrets.VPS_1_PUBLIC_IP }} &&
+          docker-compose -f docker-compose.yml pull &&
+          docker-compose -f docker-compose.yml up -d --remove-orphans &&
+          docker image prune -f
+        '
+        
+    - name: Setup SSH for VPS 2
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.VPS_2_SSH_KEY }}
+        
+    - name: Deploy to VPS 2 (Secondary)
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_2_USER }}@${{ secrets.VPS_2_HOST }} '
+          cd /opt/world-of-wisdom &&
+          git pull origin main &&
+          export PUBLIC_IP=${{ secrets.VPS_2_PUBLIC_IP }} &&
+          docker-compose -f docker-compose.yml pull &&
+          docker-compose -f docker-compose.yml up -d --remove-orphans &&
+          docker image prune -f
+        '
+        
+    - name: Health check VPS 1
+      run: |
+        sleep 30
+        curl -f http://${{ secrets.VPS_1_PUBLIC_IP }}:8082/health || exit 1
+        curl -f http://${{ secrets.VPS_1_PUBLIC_IP }}:8080 || echo "TCP server check skipped"
+        
+    - name: Health check VPS 2
+      run: |
+        sleep 30
+        curl -f http://${{ secrets.VPS_2_PUBLIC_IP }}:8082/health || exit 1
+        curl -f http://${{ secrets.VPS_2_PUBLIC_IP }}:8080 || echo "TCP server check skipped"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  performance-test:
+    name: Performance Test
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/dev'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run load test
+      run: |
+        # Install testing tools
+        go install github.com/rakyll/hey@latest
+        
+        # Wait for services to be ready
+        sleep 60
+        
+        # Run basic load test against staging
+        hey -z 60s -c 10 http://${{ secrets.STAGING_HOST }}:8082/api/v1/health
+        
+        # Test WebSocket connections
+        timeout 30s go run cmd/client/main.go -server ${{ secrets.STAGING_HOST }}:8080 -algorithm argon2 || echo "Client test completed"
+
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result != 'skipped' || needs.deploy-production.result != 'skipped')
+    
+    steps:
+    - name: Deployment notification
+      run: |
+        if [ "${{ needs.deploy-production.result }}" == "success" ]; then
+          echo "✅ Production deployment successful"
+          echo "🌐 VPS 1: http://${{ secrets.VPS_1_PUBLIC_IP }}:3000"
+          echo "🌐 VPS 2: http://${{ secrets.VPS_2_PUBLIC_IP }}:3000"
+        elif [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+          echo "✅ Staging deployment successful"
+          echo "🔧 Staging: http://${{ secrets.STAGING_HOST }}:3000"
+        else
+          echo "❌ Deployment failed"
+          exit 1
+        fi

@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -12,10 +11,11 @@ import (
 type ServiceType string
 
 const (
-	ServiceTypeTCP       ServiceType = "tcp-server"
-	ServiceTypeWeb       ServiceType = "web-server" 
-	ServiceTypeAPI       ServiceType = "api-server"
-	ServiceTypeLoadBalancer ServiceType = "load-balancer"
+	ServiceTypeTCPServer     ServiceType = "tcp-server"
+	ServiceTypeWebServer     ServiceType = "web-server" 
+	ServiceTypeAPIServer     ServiceType = "api-server"
+	ServiceTypeLoadBalancer  ServiceType = "load-balancer"
+	ServiceTypeMonitor       ServiceType = "monitor"
 )
 
 // ServiceInstance represents a running service instance
