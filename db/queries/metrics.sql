@@ -40,3 +40,9 @@ FROM metrics
 WHERE metric_name IN ('current_difficulty', 'active_connections', 'total_challenges', 'hash_rate')
   AND time >= NOW() - INTERVAL '5 minutes'
 ORDER BY metric_name, time DESC;
+
+-- name: CountDifficultyAdjustments :one
+SELECT COUNT(*) as adjustment_count
+FROM metrics 
+WHERE metric_name = 'difficulty_adjustment'
+  AND time >= NOW() - INTERVAL '1 hour';
