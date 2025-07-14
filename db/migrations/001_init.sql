@@ -1,5 +1,4 @@
--- Enable TimescaleDB extension
-CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+-- Initialize PostgreSQL database
 
 -- Create enum types
 CREATE TYPE pow_algorithm AS ENUM ('sha256', 'argon2');
@@ -72,8 +71,8 @@ CREATE TABLE metrics (
     server_instance VARCHAR(100) DEFAULT 'default'
 );
 
--- Convert metrics table to hypertable
-SELECT create_hypertable('metrics', 'time');
+-- Create index for metrics time series queries
+CREATE INDEX idx_metrics_time ON metrics(time);
 
 -- Create indexes
 CREATE INDEX idx_challenges_client_id ON challenges(client_id);
@@ -130,8 +129,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Retention policy for metrics (keep 30 days)
-SELECT add_retention_policy('metrics', INTERVAL '30 days');
+-- Note: Manual cleanup of old metrics data may be needed (keep 30 days)
+-- DELETE FROM metrics WHERE time < NOW() - INTERVAL '30 days';
 
 -- Initial data
 INSERT INTO metrics (metric_name, metric_value, labels) VALUES

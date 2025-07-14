@@ -1,7 +1,8 @@
 import { Paper, Title, Grid, Group, Badge, Text, Stack, RingProgress, ThemeIcon, Loader, Alert, Progress } from '@mantine/core'
 import { LineChart, AreaChart } from '@mantine/charts'
-import { IconShield, IconClock, IconNetwork, IconWifi, IconInfoCircle } from '@tabler/icons-react'
+import { IconShield, IconClock, IconNetwork, IconInfoCircle, IconRefresh } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
+import { useStatsPolling } from '../hooks/useAPIPolling'
 
 interface MetricsData {
   timestamp: number
@@ -15,58 +16,124 @@ interface MetricsData {
   activeConnections: number
 }
 
-interface MetricsDashboardProps {
-  metrics: MetricsData | null
+interface StatsData {
+  stats: {
+    currentDifficulty: number
+    averageSolveTime: number
+    hashRate: number
+    totalChallenges: number
+    completedChallenges: number
+    liveConnections: number
+    totalConnections: number
+    networkIntensity: number
+    activeMinerCount: number
+  }
+  miningActive: boolean
+  connections: {
+    total: number
+    active: number
+  }
+  blockchain: {
+    blocks: number
+    lastBlock: any
+  }
+  challenges: {
+    active: number
+  }
+  system: {
+    algorithm: string
+    intensity: number
+    activeMiners: number
+  }
 }
 
-export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
+export function MetricsDashboard() {
+  const { data: statsResponse, loading, error } = useStatsPolling({ interval: 2000 })
   const [metricsHistory, setMetricsHistory] = useState<MetricsData[]>([])
 
+  const stats: StatsData | null = statsResponse?.status === 'success' ? statsResponse.data : null
+
   useEffect(() => {
-    if (metrics) {
+    if (stats) {
+      // Convert stats to metrics format for charts
+      const metrics: MetricsData = {
+        timestamp: Date.now(),
+        connectionsTotal: stats.connections.total,
+        currentDifficulty: stats.stats.currentDifficulty,
+        puzzlesSolvedTotal: stats.stats.completedChallenges,
+        puzzlesFailedTotal: stats.stats.totalChallenges - stats.stats.completedChallenges,
+        averageSolveTime: stats.stats.averageSolveTime,
+        connectionRate: 0, // This would need to be calculated from connection history
+        difficultyAdjustments: 0, // This would need to be tracked separately
+        activeConnections: stats.connections.active
+      }
+      
       setMetricsHistory(prev => {
         const newHistory = [...prev, metrics]
         // Keep last 50 data points
         return newHistory.slice(-50)
       })
     }
-  }, [metrics])
+  }, [stats])
 
-  if (!metrics) {
+  if (loading || !stats) {
     return (
       <Paper p="lg" withBorder>
         <Stack gap="md">
           <Group justify="space-between">
             <Title order={3}>Live Metrics Dashboard</Title>
             <Badge color="orange" variant="light" leftSection={<Loader size={12} />}>
-              Connecting
+              {loading ? 'Loading' : 'Connecting'}
             </Badge>
           </Group>
 
-          <Alert icon={<IconInfoCircle size={16} />} color="blue">
-            <Text size="sm">
-              <strong>Setting up real-time metrics...</strong>
-              <br />
-              • Connecting to Prometheus server
-              <br />
-              • Establishing WebSocket connection
-              <br />
-              • Loading current system status
-            </Text>
-          </Alert>
+          {error ? (
+            <Alert icon={<IconInfoCircle size={16} />} color="red">
+              <Text size="sm">
+                <strong>Connection Error:</strong> {error}
+                <br />
+                Retrying automatically...
+              </Text>
+            </Alert>
+          ) : (
+            <Alert icon={<IconInfoCircle size={16} />} color="blue">
+              <Text size="sm">
+                <strong>Loading dashboard metrics...</strong>
+                <br />
+                • Connecting to API server
+                <br />
+                • Fetching real-time statistics
+                <br />
+                • Loading current system status
+              </Text>
+            </Alert>
+          )}
 
-          <Progress size="sm" animated color="blue" value={100} />
+          <Progress size="sm" animated color={error ? "red" : "blue"} value={100} />
 
           <Text size="sm" c="dimmed" ta="center">
-            This may take a few seconds on first load
+            {error ? 'Connection failed - retrying...' : 'This may take a few seconds on first load'}
           </Text>
         </Stack>
       </Paper>
     )
   }
 
-  const successRate = metrics.puzzlesSolvedTotal + metrics.puzzlesFailedTotal > 0
-    ? (metrics.puzzlesSolvedTotal / (metrics.puzzlesSolvedTotal + metrics.puzzlesFailedTotal)) * 100
+  // Use current metrics from stats for display
+  const currentMetrics: MetricsData = {
+    timestamp: Date.now(),
+    connectionsTotal: stats.connections.total,
+    currentDifficulty: stats.stats.currentDifficulty,
+    puzzlesSolvedTotal: stats.stats.completedChallenges,
+    puzzlesFailedTotal: stats.stats.totalChallenges - stats.stats.completedChallenges,
+    averageSolveTime: stats.stats.averageSolveTime,
+    connectionRate: 0,
+    difficultyAdjustments: 0,
+    activeConnections: stats.connections.active
+  }
+
+  const successRate = currentMetrics.puzzlesSolvedTotal + currentMetrics.puzzlesFailedTotal > 0
+    ? (currentMetrics.puzzlesSolvedTotal / (currentMetrics.puzzlesSolvedTotal + currentMetrics.puzzlesFailedTotal)) * 100
     : 0
 
   const lineChartData = metricsHistory.map((m, index) => ({
@@ -85,20 +152,29 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
     return `${timeMs.toFixed(1)}ms`
   }
 
-  const difficultyColor = metrics.currentDifficulty >= 4 ? 'red' : metrics.currentDifficulty >= 3 ? 'orange' : 'green'
+  const difficultyColor = currentMetrics.currentDifficulty >= 4 ? 'red' : currentMetrics.currentDifficulty >= 3 ? 'orange' : 'green'
 
   return (
     <Stack gap="lg">
       <Paper p="lg" withBorder>
         <Group justify="space-between" mb="lg">
           <Title order={3}>Live Metrics Dashboard</Title>
-          <Badge
-            color="green"
-            variant="light"
-            leftSection={<IconWifi size={12} />}
-          >
-            Live Data Connected
-          </Badge>
+          <Group gap="xs">
+            <Badge
+              color="green"
+              variant="light"
+              leftSection={<IconRefresh size={12} />}
+            >
+              HTTP Polling Active
+            </Badge>
+            <Badge
+              color="blue"
+              variant="light"
+              size="sm"
+            >
+              {stats.miningActive ? 'Mining Active' : 'Mining Stopped'}
+            </Badge>
+          </Group>
         </Group>
 
         {/* Key Metrics Cards */}
@@ -111,7 +187,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                     Current Difficulty
                   </Text>
                   <Text fw={700} size="xl">
-                    {metrics.currentDifficulty}
+                    {currentMetrics.currentDifficulty}
                   </Text>
                 </div>
                 <ThemeIcon color={difficultyColor} variant="light" size={38} radius="md">
@@ -119,8 +195,8 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                 </ThemeIcon>
               </Group>
               <Badge color={difficultyColor} variant="light" size="sm" mt="sm">
-                {metrics.currentDifficulty >= 4 ? 'High Security' :
-                  metrics.currentDifficulty >= 3 ? 'Medium Security' : 'Normal'}
+                {currentMetrics.currentDifficulty >= 4 ? 'High Security' :
+                  currentMetrics.currentDifficulty >= 3 ? 'Medium Security' : 'Normal'}
               </Badge>
             </Paper>
           </Grid.Col>
@@ -133,7 +209,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                     Total Connections
                   </Text>
                   <Text fw={700} size="xl">
-                    {metrics.connectionsTotal}
+                    {currentMetrics.connectionsTotal}
                   </Text>
                 </div>
                 <ThemeIcon color="blue" variant="light" size={38} radius="md">
@@ -141,7 +217,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                 </ThemeIcon>
               </Group>
               <Text size="xs" c="dimmed" mt="sm">
-                Active: {metrics.activeConnections}
+                Active: {currentMetrics.activeConnections}
               </Text>
             </Paper>
           </Grid.Col>
@@ -164,7 +240,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                 />
               </Group>
               <Text size="xs" c="dimmed" mt="sm">
-                {metrics.puzzlesSolvedTotal} solved / {metrics.puzzlesFailedTotal} failed
+                {currentMetrics.puzzlesSolvedTotal} solved / {currentMetrics.puzzlesFailedTotal} failed
               </Text>
             </Paper>
           </Grid.Col>
@@ -177,7 +253,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                     Avg Solve Time
                   </Text>
                   <Text fw={700} size="xl">
-                    {formatSolveTime(metrics.averageSolveTime)}
+                    {formatSolveTime(currentMetrics.averageSolveTime)}
                   </Text>
                 </div>
                 <ThemeIcon color="teal" variant="light" size={38} radius="md">
@@ -185,7 +261,7 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
                 </ThemeIcon>
               </Group>
               <Text size="xs" c="dimmed" mt="sm">
-                Connection rate: {metrics.connectionRate.toFixed(1)}/min
+                Connection rate: {currentMetrics.connectionRate.toFixed(1)}/min
               </Text>
             </Paper>
           </Grid.Col>
@@ -273,22 +349,22 @@ export function MetricsDashboard({ metrics }: MetricsDashboardProps) {
           <div>
             <Title order={4}>DDoS Protection Status</Title>
             <Text size="sm" c="dimmed">
-              Adaptive difficulty adjustments: {metrics.difficultyAdjustments}
+              Adaptive difficulty adjustments: {currentMetrics.difficultyAdjustments}
             </Text>
           </div>
           <Badge
-            color={metrics.connectionRate > 20 ? 'red' : metrics.connectionRate > 10 ? 'orange' : 'green'}
+            color={currentMetrics.connectionRate > 20 ? 'red' : currentMetrics.connectionRate > 10 ? 'orange' : 'green'}
             variant="light"
             size="lg"
           >
-            {metrics.connectionRate > 20 ? 'High Load Detected' :
-              metrics.connectionRate > 10 ? 'Moderate Load' : 'Normal Operation'}
+            {currentMetrics.connectionRate > 20 ? 'High Load Detected' :
+              currentMetrics.connectionRate > 10 ? 'Moderate Load' : 'Normal Operation'}
           </Badge>
         </Group>
 
-        {metrics.connectionRate > 20 && (
+        {currentMetrics.connectionRate > 20 && (
           <Text size="sm" c="red" mt="sm">
-            ⚠️ High connection rate detected - difficulty automatically increased to {metrics.currentDifficulty}
+            ⚠️ High connection rate detected - difficulty automatically increased to {currentMetrics.currentDifficulty}
           </Text>
         )}
       </Paper>

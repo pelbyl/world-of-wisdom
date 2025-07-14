@@ -60,8 +60,10 @@ func main() {
 
 	server := webserver.NewWebServer(*tcpServer, *algorithm, dbpool, queries)
 
-	http.HandleFunc("/ws", server.HandleWebSocket)
 	http.HandleFunc("/api/stats", server.HandleStats)
+	http.HandleFunc("/api/recent-solves", server.HandleRecentSolves)
+	http.HandleFunc("/api/health", server.HandleHealth)
+	http.HandleFunc("/api/logs", server.HandleLogs)
 	http.HandleFunc("/api/simulate", server.HandleSimulateClient)
 	http.HandleFunc("/api/clear", server.HandleClearState)
 

@@ -1,38 +1,21 @@
+
 services:
   postgres:
-    image: timescale/timescaledb:2.11.2-pg15
+    image: postgres:15
     container_name: wisdom-postgres
     environment:
       POSTGRES_DB: wisdom
       POSTGRES_USER: wisdom
       POSTGRES_PASSWORD: wisdom123
-      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d
-      - ./scripts:/scripts
     networks:
       - wisdom-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wisdom -d wisdom"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: wisdom-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - wisdom-network
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -43,12 +26,8 @@ services:
       dockerfile: Dockerfile.server
     ports:
       - "8080:8080"
-      - "2112:2112"
-    command: ["./server", "-algorithm", "argon2", "-difficulty", "2", "-adaptive", "true"]
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     environment:
       POSTGRES_HOST: postgres
@@ -57,20 +36,12 @@ services:
       POSTGRES_PASSWORD: wisdom123
       POSTGRES_DB: wisdom
       POSTGRES_SSL_MODE: disable
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      ALGORITHM: argon2
+      DIFFICULTY: 2
+      ADAPTIVE_MODE: true
     networks:
       - wisdom-network
-    # Resource limits for TCP server with restart policy
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 1G
-        reservations:
-          cpus: '1.0'
-          memory: 512M
 
   webserver:
     build:
@@ -78,14 +49,9 @@ services:
       dockerfile: Dockerfile.webserver
     ports:
       - "8081:8081"
-    command: ["./webserver", "-tcp-server", "server:8080", "-algorithm", "argon2"]
     depends_on:
-      server:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - server
+      - postgres
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -93,68 +59,11 @@ services:
       POSTGRES_PASSWORD: wisdom123
       POSTGRES_DB: wisdom
       POSTGRES_SSL_MODE: disable
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    networks:
-      - wisdom-network
-    volumes:
-      - wisdom-data:/tmp/wisdom-data
-    # Resource limits and restart policy for stability
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/ws"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '6.0'     # Increased for extreme simulation stability
-          memory: 4G      # Increased for large-scale mining
-        reservations:
-          cpus: '2.0'
-          memory: 1G
-
-  apiserver:
-    build:
-      context: .
-      dockerfile: Dockerfile.apiserver
-    ports:
-      - "8082:8082"
-    command: ["./apiserver", "-port", ":8082", "-cors", "dev"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: wisdom
-      POSTGRES_PASSWORD: wisdom123
-      POSTGRES_DB: wisdom
-      POSTGRES_SSL_MODE: disable
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      TCP_SERVER_HOST: server
+      TCP_SERVER_PORT: 8080
     networks:
       - wisdom-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-
 
   web:
     build:
@@ -168,11 +77,7 @@ services:
       - wisdom-network
 
 volumes:
-  wisdom-data:
-    driver: local
   postgres_data:
-    driver: local
-  redis_data:
     driver: local
 
 networks:

@@ -12,7 +12,7 @@ import ConnectionStatus from './components/ConnectionStatus'
 import { useWebSocket } from './hooks/useWebSocket'
 // Removed localStorage persistence - service is now stateless
 import { Block, Challenge, ClientConnection, MiningStats, MetricsData, LogMessage } from './types'
-import { apiClient, convertApiLogToLogMessage } from './utils/api'
+// WebSocket-only communication - no API client needed
 
 function App() {
   // Stateless initialization - all data comes from server
@@ -38,27 +38,17 @@ function App() {
 
   const { sendMessage, lastMessage, readyState, connectionState, forceReconnect } = useWebSocket('ws://localhost:8081/ws')
 
-  // Fetch logs from API
-  const fetchLogs = useCallback(async () => {
-    try {
-      const apiLogs = await apiClient.getRecentLogs(100)
-      const logs = apiLogs.map(convertApiLogToLogMessage)
-      setLogs(logs)
-    } catch (error) {
-      console.error('Failed to fetch logs from API:', error)
-    }
-  }, [])
+  // Request logs via WebSocket - server will send all logs from database
+  const requestLogs = useCallback(() => {
+    sendMessage(JSON.stringify({ type: 'get_logs' }))
+  }, [sendMessage])
 
-  // Initial data load and adaptive polling based on connection state
+  // Initial data load - request all logs from database via WebSocket
   useEffect(() => {
-    fetchLogs()
-    
-    // Adaptive polling: faster during degraded mode, slower when WebSocket is working
-    const pollInterval = connectionState.degradedMode || connectionState.isError ? 5000 : 30000
-    const interval = setInterval(fetchLogs, pollInterval)
-    
-    return () => clearInterval(interval)
-  }, [fetchLogs, connectionState.degradedMode, connectionState.isError])
+    if (readyState === WebSocket.OPEN) {
+      requestLogs()
+    }
+  }, [requestLogs, readyState])
 
   useEffect(() => {
     if (lastMessage) {
@@ -103,7 +93,12 @@ function App() {
             if (data.log) {
               // Add new log immediately for real-time feedback
               setLogs(prev => [...prev.slice(-99), data.log]) // Keep last 100 logs
-              // Note: Database is the source of truth, periodic refresh will sync any differences
+            }
+            break
+          case 'logs':
+            // Full log list from database - all time logs
+            if (data.logs) {
+              setLogs(data.logs)
             }
             break
           case 'init':
@@ -111,8 +106,8 @@ function App() {
             setBlocks(data.blocks || [])
             setConnections(data.connections || [])
             setCurrentChallenges(data.challenges || [])
-            // Fetch logs from API instead of WebSocket to ensure database consistency
-            fetchLogs()
+            // Request logs from database via WebSocket
+            requestLogs()
             if (data.stats) {
               setStats(data.stats)
             }
@@ -124,7 +119,7 @@ function App() {
         console.error('Error parsing WebSocket message:', error)
       }
     }
-  }, [lastMessage])
+  }, [lastMessage, requestLogs])
 
   // Stateless service - no persistence needed
 
@@ -212,7 +207,7 @@ function App() {
             </Grid.Col>
 
             <Grid.Col span={12}>
-              <MetricsDashboard metrics={metrics} />
+              <MetricsDashboard />
             </Grid.Col>
 
             <Grid.Col span={12}>
