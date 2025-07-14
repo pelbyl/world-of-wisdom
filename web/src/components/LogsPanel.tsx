@@ -87,7 +87,7 @@ export function LogsPanel({ logs }: Props) {
   if (logs.length === 0) {
     return (
       <Text c="dimmed" ta="center" py="xl">
-        No simulation logs yet - start auto mining to see network activity!
+        No logs yet - network activity will appear here
       </Text>
     )
   }

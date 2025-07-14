@@ -22,7 +22,7 @@ type Config struct {
 
 	// Server
 	ServerPort    string
-	WebServerPort string
+	APIServerPort string
 	MetricsPort   string
 	Algorithm     string
 	Difficulty    int
@@ -37,21 +37,21 @@ type Config struct {
 func LoadConfig() *Config {
 	return &Config{
 		// Database defaults
-		PostgresHost:     getEnvString("POSTGRES_HOST", "localhost"),
+		PostgresHost:     getEnvString("POSTGRES_HOST", "postgres"),
 		PostgresPort:     getEnvInt("POSTGRES_PORT", 5432),
 		PostgresUser:     getEnvString("POSTGRES_USER", "wisdom"),
 		PostgresPassword: getEnvString("POSTGRES_PASSWORD", "wisdom123"),
 		PostgresDB:       getEnvString("POSTGRES_DB", "wisdom"),
 		PostgresSSLMode:  getEnvString("POSTGRES_SSL_MODE", "disable"),
 
-		RedisHost:     getEnvString("REDIS_HOST", "localhost"),
+		RedisHost:     getEnvString("REDIS_HOST", "redis"),
 		RedisPort:     getEnvInt("REDIS_PORT", 6379),
 		RedisPassword: getEnvString("REDIS_PASSWORD", ""),
 		RedisDB:       getEnvInt("REDIS_DB", 0),
 
 		// Server defaults
 		ServerPort:    getEnvString("SERVER_PORT", ":8080"),
-		WebServerPort: getEnvString("WEBSERVER_PORT", ":8081"),
+		APIServerPort: getEnvString("API_SERVER_PORT", ":8081"),
 		MetricsPort:   getEnvString("METRICS_PORT", ":2112"),
 		Algorithm:     getEnvString("ALGORITHM", "argon2"),
 		Difficulty:    getEnvInt("DIFFICULTY", 2),

@@ -7,6 +7,9 @@ A simple TCP server that serves wisdom quotes protected by Proof-of-Work (PoW) c
 ## 🚀 Quick Start
 
 ```bash
+# Setup environment (first time only)
+cp .env.example .env
+
 # Start complete system with docker-compose
 docker-compose up -d
 
@@ -24,6 +27,36 @@ docker-compose up -d
 - **🚀 REST API**: Type-safe database operations with sqlc-generated queries
 - **🔄 Auto-Recovery**: Robust error handling with automatic reconnection
 - **🐳 Docker Ready**: Simple docker-compose setup for local development
+
+## ⚙️ Environment Configuration
+
+The application uses environment variables for configuration management. To get started:
+
+1. **Copy the example environment file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit the .env file** to customize your setup if needed
+
+3. **Start the services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+The `.env` file contains all configurable variables with sensible defaults:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER_PORT` | 8080 | TCP server port |
+| `WEBSERVER_PORT` | 8081 | REST API server port |
+| `WEB_PORT` | 3000 | Frontend port |
+| `API_BASE_URL` | http://localhost:8081/api/v1 | API endpoint URL |
+| `POSTGRES_*` | Various | Database configuration |
+| `ALGORITHM` | argon2 | PoW algorithm (sha256/argon2) |
+| `DIFFICULTY` | 2 | Mining difficulty |
+
+**Note:** Environment variables are automatically loaded by docker-compose from the `.env` file.
 
 ## 📊 Proof-of-Work Algorithm Comparison
 
@@ -84,7 +117,7 @@ The Word of Wisdom system is a simple, clean architecture with three core compon
 ┌──────────────────────────────────────────────────────────────────────────────────┐
 │                              Word of Wisdom System                               │
 ├─────────────┬─────────────┬─────────────┬──────────────────────────────────────────┤
-│   Database  │ TCP Server  │ Web Server  │            React Frontend               │
+│   Database  │ TCP Server  │ API Server  │            React Frontend               │
 │   Layer     │ (Port 8080) │ (Port 8081) │            (Port 3000)                  │
 ├─────────────┼─────────────┼─────────────┼──────────────────────────────────────────┤
 │             │             │             │                                          │
@@ -160,14 +193,14 @@ type Argon2Challenge struct {
 - **Resource Protection**: CPU and memory usage monitoring
 - **Connection Limits**: Per-IP rate limiting and concurrent connection caps
 
-#### 3. **Web Server** (Port 8081) - Real-Time API & WebSocket
+#### 3. **API Server** (Port 8081) - REST API
 
-**WebSocket API:**
+**REST API:**
 
-- **Bidirectional Communication**: Real-time updates to frontend
-- **Mining Simulation Control**: Start/stop/configure mining sessions
-- **Live Data Streams**: Blocks, challenges, connections, metrics
-- **REST API**: CRUD operations for all data types
+- **Read-Only Database Access**: Serves data to frontend via HTTP endpoints
+- **OpenAPI Specification**: Documented API with typed responses
+- **Real-Time Polling**: Frontend polls for live data updates
+- **Echo Framework**: High-performance HTTP server with middleware
 
 **Key Message Types:**
 
@@ -253,7 +286,6 @@ ADAPTIVE_MODE=true
 - **📊 Live Metrics**: Real-time difficulty and performance tracking
 - **🔗 Blockchain View**: Visual representation of solved challenges
 - **📋 Activity Logs**: Real-time system activity logs
-- **🎮 Interactive Controls**: Demo mode with progress tracking
 - **🔄 Connection Status**: WebSocket state with auto-reconnection
 - **💾 Persistent Stats**: Data survives page refresh
 
@@ -274,39 +306,6 @@ docker-compose up -d
 # Test API endpoints
 curl -s "http://localhost:8081/health"
 curl -s "http://localhost:8081/api/challenges" | jq '.'
-```
-
-### Interactive Web Interface Testing
-
-**Available Test Modes:**
-
-1. **📱 Demo Mode** (60 seconds)
-   - Light load: 2-8 miners
-   - Perfect for demonstrations and basic functionality testing
-
-2. **⚡ Stress Test** (2 minutes)
-   - Moderate load: 5-15 miners  
-   - Tests adaptive difficulty and system resilience
-
-3. **🏭 Realistic Mode** (5 minutes)
-   - Production-like: 3-12 miners
-   - Long-duration simulation for stability testing
-
-**Testing Steps:**
-
-```bash
-# 1. Open the dashboard
-open http://localhost:3000
-
-# 2. Test each mode progressively
-# - Start with Demo Mode to verify basic functionality
-# - Try Stress Test to check adaptive difficulty
-# - Use Realistic Mode for extended stability testing
-
-# 3. Monitor during tests
-# - Watch real-time metrics and difficulty adjustments
-# - Verify logs show mining activity with timestamps
-# - Check WebSocket connection resilience during load
 ```
 
 ## 🐳 Docker Deployment
@@ -336,10 +335,10 @@ world-of-wisdom/
 ├── cmd/                          # Executable entry points
 │   ├── server/                   # TCP server (Argon2 PoW)
 │   ├── client/                   # Test client
-│   └── webserver/                # WebSocket API & REST API
+│   └── apiserver/                # REST API server
 ├── internal/                     # Application logic
 │   ├── server/                   # TCP server implementation
-│   ├── webserver/                # WebSocket server implementation
+│   ├── apiserver/                # API server implementation
 │   └── client/                   # Client implementation
 ├── api/db/                       # Generated database code (sqlc)
 │   ├── *.sql.go                  # Type-safe database queries

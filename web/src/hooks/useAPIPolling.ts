@@ -107,19 +107,21 @@ export const useAPIPolling = (endpoint: string, options: PollingOptions = {}) =>
   }
 }
 
-// Specialized hooks for different endpoints
+// Specialized hooks for different endpoints (v1 API)
+import config from '../config'
+
 export const useStatsPolling = (options?: PollingOptions) => {
-  return useAPIPolling('http://localhost:8083/api/stats', options)
+  return useAPIPolling(`${config.api.baseURL}/stats`, options)
 }
 
 export const useHealthPolling = (options?: PollingOptions) => {
-  return useAPIPolling('http://localhost:8083/api/health', options)
+  return useAPIPolling(`${config.api.baseURL}/health`, options)
 }
 
 export const useLogsPolling = (options?: PollingOptions) => {
-  return useAPIPolling('http://localhost:8083/api/logs', options)
+  return useAPIPolling(`${config.api.baseURL}/logs`, options)
 }
 
 export const useRecentSolvesPolling = (options?: PollingOptions) => {
-  return useAPIPolling('http://localhost:8083/api/recent-solves', options)
+  return useAPIPolling(`${config.api.baseURL}/recent-solves`, options)
 }

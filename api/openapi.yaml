@@ -1,0 +1,554 @@
+openapi: 3.1.0
+info:
+  title: Word of Wisdom API
+  description: Read-only API for monitoring the Word of Wisdom proof-of-work system
+  version: 1.0.0
+  contact:
+    name: Word of Wisdom
+    email: contact@wordofwisdom.example
+
+servers:
+  - url: http://localhost:8081
+    description: Development server
+
+paths:
+  # Health and system endpoints
+  /health:
+    get:
+      summary: Get server health status
+      description: Returns the current health status of the server
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Server health information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/stats:
+    get:
+      summary: Get current system statistics
+      description: Returns comprehensive server statistics including mining data, connections, and blockchain info
+      operationId: getStats
+      tags:
+        - Statistics
+      responses:
+        "200":
+          description: Server statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+
+  /api/v1/challenges:
+    get:
+      summary: Get recent challenges list
+      description: Returns recent challenges with their status and details
+      operationId: getChallenges
+      tags:
+        - Challenges
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of challenges to return
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by challenge status
+          required: false
+          schema:
+            type: string
+            enum: [pending, solving, completed, failed, expired]
+        - name: algorithm
+          in: query
+          description: Filter by algorithm
+          required: false
+          schema:
+            type: string
+            enum: [sha256, argon2]
+      responses:
+        "200":
+          description: Recent challenges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChallengesResponse"
+
+  /api/v1/metrics:
+    get:
+      summary: Get time-series metrics
+      description: Returns system metrics data for monitoring and visualization
+      operationId: getMetrics
+      tags:
+        - Metrics
+      parameters:
+        - name: metric
+          in: query
+          description: Specific metric name to retrieve
+          required: false
+          schema:
+            type: string
+        - name: interval
+          in: query
+          description: Time interval for aggregation
+          required: false
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h]
+            default: 5m
+        - name: start
+          in: query
+          description: Start timestamp (ISO 8601 or Unix timestamp)
+          required: false
+          schema:
+            type: string
+        - name: end
+          in: query
+          description: End timestamp (ISO 8601 or Unix timestamp)
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Time-series metrics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+
+  /api/v1/connections:
+    get:
+      summary: Get active connections
+      description: Returns information about currently active client connections
+      operationId: getConnections
+      tags:
+        - Connections
+      parameters:
+        - name: status
+          in: query
+          description: Filter by connection status
+          required: false
+          schema:
+            type: string
+            enum: [connected, solving, disconnected, failed]
+      responses:
+        "200":
+          description: Active connections
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionsResponse"
+
+  /api/v1/recent-solves:
+    get:
+      summary: Get recent blockchain solves
+      description: Returns the last 10 blocks that were mined
+      operationId: getRecentSolves
+      tags:
+        - Blockchain
+      responses:
+        "200":
+          description: Recent blockchain blocks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecentSolvesResponse"
+
+  /api/v1/logs:
+    get:
+      summary: Get system logs
+      description: Returns recent system logs from the database
+      operationId: getLogs
+      tags:
+        - Logs
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of logs to return
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+      responses:
+        "200":
+          description: System logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogsResponse"
+
+components:
+  schemas:
+    # Response wrapper
+    APIResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        data:
+          type: object
+        message:
+          type: string
+
+    ErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [error]
+            message:
+              type: string
+              example: "Internal server error"
+
+    # Health endpoint
+    HealthResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/HealthData"
+
+    HealthData:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        miningActive:
+          type: boolean
+        totalBlocks:
+          type: integer
+        activeChallenges:
+          type: integer
+        liveConnections:
+          type: integer
+        algorithm:
+          type: string
+          enum: [sha256, argon2]
+        difficulty:
+          type: integer
+
+    # Stats endpoint
+    StatsResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/StatsData"
+
+    StatsData:
+      type: object
+      properties:
+        stats:
+          $ref: "#/components/schemas/MiningStats"
+        miningActive:
+          type: boolean
+        connections:
+          $ref: "#/components/schemas/ConnectionStats"
+        blockchain:
+          $ref: "#/components/schemas/BlockchainStats"
+        challenges:
+          $ref: "#/components/schemas/ChallengeStats"
+        system:
+          $ref: "#/components/schemas/SystemStats"
+
+    MiningStats:
+      type: object
+      properties:
+        totalChallenges:
+          type: integer
+        completedChallenges:
+          type: integer
+        averageSolveTime:
+          type: number
+          format: float
+        currentDifficulty:
+          type: integer
+        hashRate:
+          type: number
+          format: float
+
+    ConnectionStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        active:
+          type: integer
+
+    BlockchainStats:
+      type: object
+      properties:
+        blocks:
+          type: integer
+        lastBlock:
+          $ref: "#/components/schemas/Block"
+
+    ChallengeStats:
+      type: object
+      properties:
+        active:
+          type: integer
+
+    SystemStats:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        intensity:
+          type: integer
+        activeMiners:
+          type: integer
+
+    # Challenges endpoint
+    ChallengesResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                challenges:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ChallengeDetail"
+                total:
+                  type: integer
+
+    ChallengeDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        seed:
+          type: string
+        difficulty:
+          type: integer
+        algorithm:
+          type: string
+          enum: [sha256, argon2]
+        clientId:
+          type: string
+        status:
+          type: string
+          enum: [pending, solving, completed, failed, expired]
+        createdAt:
+          type: string
+          format: date-time
+        solvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+        solveTimeMs:
+          type: integer
+          nullable: true
+
+    # Metrics endpoint
+    MetricsResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                metrics:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/MetricData"
+
+    MetricData:
+      type: object
+      properties:
+        time:
+          type: string
+          format: date-time
+        metricName:
+          type: string
+        value:
+          type: number
+        avgValue:
+          type: number
+        maxValue:
+          type: number
+        minValue:
+          type: number
+        labels:
+          type: object
+          additionalProperties: true
+
+    # Connections endpoint
+    ConnectionsResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                connections:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ConnectionDetail"
+                total:
+                  type: integer
+                active:
+                  type: integer
+
+    ConnectionDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        clientId:
+          type: string
+        remoteAddr:
+          type: string
+        status:
+          type: string
+          enum: [connected, solving, disconnected, failed]
+        algorithm:
+          type: string
+          enum: [sha256, argon2]
+        connectedAt:
+          type: string
+          format: date-time
+        disconnectedAt:
+          type: string
+          format: date-time
+          nullable: true
+        challengesAttempted:
+          type: integer
+        challengesCompleted:
+          type: integer
+        totalSolveTimeMs:
+          type: integer
+
+    # Blockchain models
+    Block:
+      type: object
+      properties:
+        index:
+          type: integer
+        timestamp:
+          type: integer
+          format: int64
+        challenge:
+          $ref: "#/components/schemas/Challenge"
+        solution:
+          $ref: "#/components/schemas/Solution"
+        quote:
+          type: string
+        previousHash:
+          type: string
+        hash:
+          type: string
+
+    Challenge:
+      type: object
+      properties:
+        id:
+          type: string
+        seed:
+          type: string
+        difficulty:
+          type: integer
+        timestamp:
+          type: integer
+          format: int64
+        clientId:
+          type: string
+        status:
+          type: string
+          enum: [solving, completed, failed]
+
+    Solution:
+      type: object
+      properties:
+        challengeId:
+          type: string
+        nonce:
+          type: string
+        hash:
+          type: string
+        attempts:
+          type: integer
+        timeToSolve:
+          type: integer
+          format: int64
+        timestamp:
+          type: integer
+          format: int64
+
+    # Recent solves endpoint
+    RecentSolvesResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Block"
+
+    # Logs endpoint
+    LogsResponse:
+      allOf:
+        - $ref: "#/components/schemas/APIResponse"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/LogMessage"
+
+    LogMessage:
+      type: object
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+        level:
+          type: string
+          enum: [info, success, warning, error]
+        message:
+          type: string
+        icon:
+          type: string
+
+tags:
+  - name: Health
+    description: Server health and status endpoints
+  - name: Statistics
+    description: Mining and server statistics
+  - name: Challenges
+    description: Challenge management and monitoring
+  - name: Metrics
+    description: Time-series metrics for monitoring
+  - name: Connections
+    description: Client connection monitoring
+  - name: Blockchain
+    description: Blockchain data and recent activity
+  - name: Logs
+    description: System logs and events

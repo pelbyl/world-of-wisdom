@@ -2,16 +2,23 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
 
+	generated "world-of-wisdom/internal/database/generated"
 	"world-of-wisdom/pkg/metrics"
 	"world-of-wisdom/pkg/pow"
 	"world-of-wisdom/pkg/wisdom"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Server struct {
@@ -22,6 +29,10 @@ type Server struct {
 	mu            sync.RWMutex
 	activeConns   sync.WaitGroup
 	shutdownChan  chan struct{}
+
+	// Database components
+	dbpool  *pgxpool.Pool
+	queries *generated.Queries
 
 	// Adaptive difficulty tracking
 	solveTimes     []time.Duration
@@ -40,6 +51,7 @@ type Config struct {
 	AdaptiveMode bool
 	MetricsPort  string
 	Algorithm    string // "sha256" or "argon2"
+	DatabaseURL  string
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -47,6 +59,23 @@ func NewServer(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", cfg.Port, err)
 	}
+
+	// Connect to database
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	dbpool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Test database connection
+	if err := dbpool.Ping(ctx); err != nil {
+		dbpool.Close()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	log.Printf("✅ TCP Server connected to database")
 
 	// Start metrics server if port specified
 	if cfg.MetricsPort != "" {
@@ -72,6 +101,8 @@ func NewServer(cfg Config) (*Server, error) {
 		difficulty:     cfg.Difficulty,
 		timeout:        cfg.Timeout,
 		shutdownChan:   make(chan struct{}),
+		dbpool:         dbpool,
+		queries:        generated.New(),
 		solveTimes:     make([]time.Duration, 0, 100),
 		lastAdjustment: time.Now(),
 		adaptiveMode:   cfg.AdaptiveMode,
@@ -110,11 +141,26 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	startTime := time.Now()
 	clientAddr := conn.RemoteAddr().String()
-	log.Printf("New connection from %s", clientAddr)
+	clientID := s.generateClientID(clientAddr)
+	log.Printf("New connection from %s (Client ID: %s)", clientAddr, clientID)
 
-	// Record connection
+	// Parse remote address
+	remoteAddr, err := netip.ParseAddr(strings.Split(clientAddr, ":")[0])
+	if err != nil {
+		log.Printf("Failed to parse remote address %s: %v", clientAddr, err)
+		return
+	}
+
+	// Create connection record in database
+	ctx := context.Background()
+	connectionRecord, err := s.logConnection(ctx, clientID, remoteAddr, s.algorithm)
+	if err != nil {
+		log.Printf("Failed to log connection: %v", err)
+		// Continue anyway - don't fail the connection due to DB issues
+	}
+
+	// Record connection metrics
 	metrics.RecordConnection("accepted")
-
 	conn.SetDeadline(time.Now().Add(s.timeout))
 
 	// Track connection rate for adaptive difficulty
@@ -125,15 +171,18 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Generate challenge based on algorithm
 	var challengeStr string
 	var verifySolution func(string) bool
+	var challengeSeed string
 
 	if s.algorithm == "sha256" {
 		challenge, err := pow.GenerateChallenge(difficulty)
 		if err != nil {
 			log.Printf("Failed to generate challenge: %v", err)
 			conn.Write([]byte("Error: Failed to generate challenge\n"))
+			s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
 			return
 		}
 		challengeStr = challenge.String()
+		challengeSeed = challenge.Seed
 		verifySolution = func(response string) bool {
 			return pow.VerifyPoW(challenge.Seed, response, challenge.Difficulty)
 		}
@@ -142,17 +191,30 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if err != nil {
 			log.Printf("Failed to generate Argon2 challenge: %v", err)
 			conn.Write([]byte("Error: Failed to generate challenge\n"))
+			s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
 			return
 		}
 		challengeStr = challenge.String()
+		challengeSeed = challenge.Seed
 		verifySolution = func(response string) bool {
 			return pow.VerifyArgon2PoW(challenge, response)
 		}
 	}
 
-	_, err := conn.Write([]byte(challengeStr + "\n"))
+	// Log challenge to database
+	challengeRecord, err := s.logChallenge(ctx, challengeSeed, int32(difficulty), s.algorithm, clientID)
+	if err != nil {
+		log.Printf("Failed to log challenge: %v", err)
+		// Continue anyway
+	}
+
+	// Update connection status to solving
+	s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusSolving)
+
+	_, err = conn.Write([]byte(challengeStr + "\n"))
 	if err != nil {
 		log.Printf("Failed to send challenge to %s: %v", clientAddr, err)
+		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
 		return
 	}
 
@@ -160,6 +222,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
 	if !scanner.Scan() {
 		log.Printf("Client %s disconnected or timed out", clientAddr)
+		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
+		if challengeRecord.ID != (pgtype.UUID{}) {
+			s.updateChallengeStatus(ctx, challengeRecord.ID, generated.ChallengeStatusExpired)
+		}
 		return
 	}
 
@@ -170,6 +236,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 		log.Printf("Client %s solved the %s challenge in %v", clientAddr, s.algorithm, solveTime)
 		s.recordSolveTime(solveTime)
 
+		// Log successful solution to database
+		if challengeRecord.ID != (pgtype.UUID{}) {
+			s.logSolution(ctx, challengeRecord.ID, response, true, solveTime)
+			s.updateChallengeStatus(ctx, challengeRecord.ID, generated.ChallengeStatusCompleted)
+		}
+
 		// Record metrics
 		metrics.RecordPuzzleSolved(difficulty, solveTime)
 		metrics.RecordProcessingTime("success", time.Since(startTime))
@@ -179,12 +251,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 	} else {
 		log.Printf("Client %s failed the %s challenge", clientAddr, s.algorithm)
 
+		// Log failed solution to database
+		if challengeRecord.ID != (pgtype.UUID{}) {
+			s.logSolution(ctx, challengeRecord.ID, response, false, solveTime)
+			s.updateChallengeStatus(ctx, challengeRecord.ID, generated.ChallengeStatusFailed)
+		}
+
 		// Record metrics
 		metrics.RecordPuzzleFailed(difficulty)
 		metrics.RecordProcessingTime("failed", time.Since(startTime))
 
 		conn.Write([]byte("Error: Invalid proof of work\n"))
 	}
+
+	// Update final connection status
+	s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
 }
 
 func (s *Server) getDifficulty() int {
@@ -224,6 +305,12 @@ func (s *Server) Shutdown() error {
 		log.Println("All connections closed")
 	case <-time.After(10 * time.Second):
 		log.Println("Timeout waiting for connections to close")
+	}
+
+	// Close database connection pool
+	if s.dbpool != nil {
+		s.dbpool.Close()
+		log.Println("✅ Database connection pool closed")
 	}
 
 	return nil
@@ -338,4 +425,110 @@ func (s *Server) GetStats() map[string]interface{} {
 
 func (s *Server) Addr() string {
 	return s.listener.Addr().String()
+}
+
+// Database helper functions for write-only operations
+
+func (s *Server) generateClientID(clientAddr string) string {
+	return uuid.New().String()
+}
+
+func (s *Server) logConnection(ctx context.Context, clientID string, remoteAddr netip.Addr, algorithm string) (generated.Connection, error) {
+	var algo generated.PowAlgorithm
+	switch algorithm {
+	case "sha256":
+		algo = generated.PowAlgorithmSha256
+	case "argon2":
+		algo = generated.PowAlgorithmArgon2
+	default:
+		algo = generated.PowAlgorithmArgon2
+	}
+
+	params := generated.CreateConnectionParams{
+		ClientID:   clientID,
+		RemoteAddr: remoteAddr,
+		Status:     generated.ConnectionStatusConnected,
+		Algorithm:  algo,
+	}
+
+	return s.queries.CreateConnection(ctx, s.dbpool, params)
+}
+
+func (s *Server) updateConnectionStatus(ctx context.Context, connectionID pgtype.UUID, status generated.ConnectionStatus) {
+	if connectionID == (pgtype.UUID{}) {
+		return // Skip if no valid connection ID
+	}
+
+	params := generated.UpdateConnectionStatusParams{
+		ID:     connectionID,
+		Status: status,
+	}
+
+	_, err := s.queries.UpdateConnectionStatus(ctx, s.dbpool, params)
+	if err != nil {
+		log.Printf("Failed to update connection status: %v", err)
+	}
+}
+
+func (s *Server) logChallenge(ctx context.Context, seed string, difficulty int32, algorithm, clientID string) (generated.Challenge, error) {
+	var algo generated.PowAlgorithm
+	switch algorithm {
+	case "sha256":
+		algo = generated.PowAlgorithmSha256
+	case "argon2":
+		algo = generated.PowAlgorithmArgon2
+	default:
+		algo = generated.PowAlgorithmArgon2
+	}
+
+	params := generated.CreateChallengeParams{
+		Seed:       seed,
+		Difficulty: difficulty,
+		Algorithm:  algo,
+		ClientID:   clientID,
+		Status:     generated.ChallengeStatusPending,
+		// Argon2 parameters (only used for argon2 challenges)
+		Argon2Time:    pgtype.Int4{Int32: 1, Valid: algorithm == "argon2"},
+		Argon2Memory:  pgtype.Int4{Int32: 64 * 1024, Valid: algorithm == "argon2"},
+		Argon2Threads: pgtype.Int2{Int16: 4, Valid: algorithm == "argon2"},
+		Argon2Keylen:  pgtype.Int4{Int32: 32, Valid: algorithm == "argon2"},
+	}
+
+	return s.queries.CreateChallenge(ctx, s.dbpool, params)
+}
+
+func (s *Server) updateChallengeStatus(ctx context.Context, challengeID pgtype.UUID, status generated.ChallengeStatus) {
+	if challengeID == (pgtype.UUID{}) {
+		return // Skip if no valid challenge ID
+	}
+
+	params := generated.UpdateChallengeStatusParams{
+		ID:     challengeID,
+		Status: status,
+	}
+
+	_, err := s.queries.UpdateChallengeStatus(ctx, s.dbpool, params)
+	if err != nil {
+		log.Printf("Failed to update challenge status: %v", err)
+	}
+}
+
+func (s *Server) logSolution(ctx context.Context, challengeID pgtype.UUID, solution string, valid bool, solveTime time.Duration) {
+	if challengeID == (pgtype.UUID{}) {
+		return // Skip if no valid challenge ID
+	}
+
+	params := generated.CreateSolutionParams{
+		ChallengeID: challengeID,
+		Nonce:       solution,
+		Hash:        pgtype.Text{String: "", Valid: false}, // Can be empty for now
+		Attempts:    pgtype.Int4{Int32: 1, Valid: true},
+		SolveTimeMs: solveTime.Milliseconds(),
+		Verified:    valid,
+	}
+
+	_, err := s.queries.CreateSolution(ctx, s.dbpool, params)
+	if err != nil {
+		log.Printf("Failed to log solution: %v", err)
+	}
 }

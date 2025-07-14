@@ -1,0 +1,85 @@
+version: '3.8'
+
+# Demo Client Cluster - connects to existing TCP server and API server
+# This compose file only manages client containers for demonstration scenarios
+# Prerequisites: TCP server should be running on localhost:8080 or accessible host
+
+services:
+  # Fast Clients - Quick puzzle solving
+  client-fast:
+    image: world-of-wisdom-client
+    environment:
+      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_PORT: 8080
+      CLIENT_TYPE: fast
+      CLIENT_NAME: fast-client
+      SOLVE_DELAY_MS: 100
+      MAX_ATTEMPTS: 50
+      CONNECTION_DELAY_MS: 500
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wisdom-demo-network
+    restart: unless-stopped
+    scale: 0  # Start stopped
+
+  # Normal Clients - Standard puzzle solving
+  client-normal:
+    image: world-of-wisdom-client
+    environment:
+      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_PORT: 8080
+      CLIENT_TYPE: normal
+      CLIENT_NAME: normal-client
+      SOLVE_DELAY_MS: 1000
+      MAX_ATTEMPTS: 20
+      CONNECTION_DELAY_MS: 1000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wisdom-demo-network
+    restart: unless-stopped
+    scale: 0  # Start stopped
+
+  # Slow Clients - Slower puzzle solving
+  client-slow:
+    image: world-of-wisdom-client
+    environment:
+      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_PORT: 8080
+      CLIENT_TYPE: slow
+      CLIENT_NAME: slow-client
+      SOLVE_DELAY_MS: 3000
+      MAX_ATTEMPTS: 10
+      CONNECTION_DELAY_MS: 2000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wisdom-demo-network
+    restart: unless-stopped
+    scale: 0  # Start stopped
+
+  # Attacker Clients - Flood connections without solving properly
+  client-attacker:
+    image: world-of-wisdom-client
+    environment:
+      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_PORT: 8080
+      CLIENT_TYPE: attacker
+      CLIENT_NAME: attacker-client
+      SOLVE_DELAY_MS: 50
+      MAX_ATTEMPTS: 1000
+      CONNECTION_DELAY_MS: 100
+      ATTACK_MODE: "true"
+      FLOOD_CONNECTIONS: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wisdom-demo-network
+    restart: unless-stopped
+    scale: 0  # Start stopped
+
+networks:
+  wisdom-demo-network:
+    driver: bridge
+    name: wisdom-demo-network

@@ -24,6 +24,10 @@ func NewClient(serverAddr string, timeout time.Duration) *Client {
 	}
 }
 
+func (c *Client) GetServer() string {
+	return c.serverAddr
+}
+
 func (c *Client) RequestQuote() (string, error) {
 	conn, err := net.DialTimeout("tcp", c.serverAddr, c.timeout)
 	if err != nil {

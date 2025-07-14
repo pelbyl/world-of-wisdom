@@ -2,7 +2,8 @@ import { Paper, Title, Grid, Group, Badge, Text, Stack, RingProgress, ThemeIcon,
 import { LineChart, AreaChart } from '@mantine/charts'
 import { IconShield, IconClock, IconNetwork, IconInfoCircle, IconRefresh } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
-import { useStatsPolling } from '../hooks/useAPIPolling'
+import { useStats } from '../hooks/useAPI'
+import { StatsData } from '../types/api'
 
 interface MetricsData {
   timestamp: number
@@ -16,65 +17,33 @@ interface MetricsData {
   activeConnections: number
 }
 
-interface StatsData {
-  stats: {
-    currentDifficulty: number
-    averageSolveTime: number
-    hashRate: number
-    totalChallenges: number
-    completedChallenges: number
-    liveConnections: number
-    totalConnections: number
-    networkIntensity: number
-    activeMinerCount: number
-  }
-  miningActive: boolean
-  connections: {
-    total: number
-    active: number
-  }
-  blockchain: {
-    blocks: number
-    lastBlock: any
-  }
-  challenges: {
-    active: number
-  }
-  system: {
-    algorithm: string
-    intensity: number
-    activeMiners: number
-  }
-}
-
 export function MetricsDashboard() {
-  const { data: statsResponse, loading, error } = useStatsPolling({ interval: 2000 })
+  const { data: statsResponse, loading, error } = useStats({ interval: 1000 }) // 1s polling for stats
   const [metricsHistory, setMetricsHistory] = useState<MetricsData[]>([])
 
-  const stats: StatsData | null = statsResponse?.status === 'success' ? statsResponse.data : null
+  const stats: StatsData | null = statsResponse?.status === 'success' ? statsResponse.data ?? null : null;
 
   useEffect(() => {
     if (stats) {
       // Convert stats to metrics format for charts
       const metrics: MetricsData = {
         timestamp: Date.now(),
-        connectionsTotal: stats.connections.total,
-        currentDifficulty: stats.stats.currentDifficulty,
-        puzzlesSolvedTotal: stats.stats.completedChallenges,
-        puzzlesFailedTotal: stats.stats.totalChallenges - stats.stats.completedChallenges,
-        averageSolveTime: stats.stats.averageSolveTime,
+        connectionsTotal: stats.connections?.total ?? 0,
+        currentDifficulty: stats.stats?.currentDifficulty ?? 0,
+        puzzlesSolvedTotal: stats.stats?.completedChallenges ?? 0,
+        puzzlesFailedTotal: (stats.stats?.totalChallenges ?? 0) - (stats.stats?.completedChallenges ?? 0),
+        averageSolveTime: stats.stats?.averageSolveTime ?? 0,
         connectionRate: 0, // This would need to be calculated from connection history
         difficultyAdjustments: 0, // This would need to be tracked separately
-        activeConnections: stats.connections.active
-      }
-      
+        activeConnections: stats.connections?.active ?? 0
+      };
       setMetricsHistory(prev => {
-        const newHistory = [...prev, metrics]
+        const newHistory = [...prev, metrics];
         // Keep last 50 data points
-        return newHistory.slice(-50)
-      })
+        return newHistory.slice(-50);
+      });
     }
-  }, [stats])
+  }, [stats]);
 
   if (loading || !stats) {
     return (
@@ -86,7 +55,6 @@ export function MetricsDashboard() {
               {loading ? 'Loading' : 'Connecting'}
             </Badge>
           </Group>
-
           {error ? (
             <Alert icon={<IconInfoCircle size={16} />} color="red">
               <Text size="sm">
@@ -108,29 +76,26 @@ export function MetricsDashboard() {
               </Text>
             </Alert>
           )}
-
           <Progress size="sm" animated color={error ? "red" : "blue"} value={100} />
-
           <Text size="sm" c="dimmed" ta="center">
             {error ? 'Connection failed - retrying...' : 'This may take a few seconds on first load'}
           </Text>
         </Stack>
       </Paper>
-    )
+    );
   }
 
-  // Use current metrics from stats for display
   const currentMetrics: MetricsData = {
     timestamp: Date.now(),
-    connectionsTotal: stats.connections.total,
-    currentDifficulty: stats.stats.currentDifficulty,
-    puzzlesSolvedTotal: stats.stats.completedChallenges,
-    puzzlesFailedTotal: stats.stats.totalChallenges - stats.stats.completedChallenges,
-    averageSolveTime: stats.stats.averageSolveTime,
+    connectionsTotal: stats.connections?.total ?? 0,
+    currentDifficulty: stats.stats?.currentDifficulty ?? 0,
+    puzzlesSolvedTotal: stats.stats?.completedChallenges ?? 0,
+    puzzlesFailedTotal: (stats.stats?.totalChallenges ?? 0) - (stats.stats?.completedChallenges ?? 0),
+    averageSolveTime: stats.stats?.averageSolveTime ?? 0,
     connectionRate: 0,
     difficultyAdjustments: 0,
-    activeConnections: stats.connections.active
-  }
+    activeConnections: stats.connections?.active ?? 0
+  };
 
   const successRate = currentMetrics.puzzlesSolvedTotal + currentMetrics.puzzlesFailedTotal > 0
     ? (currentMetrics.puzzlesSolvedTotal / (currentMetrics.puzzlesSolvedTotal + currentMetrics.puzzlesFailedTotal)) * 100

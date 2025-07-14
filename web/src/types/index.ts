@@ -1,26 +1,8 @@
-export interface Challenge {
-  id: string
-  seed: string
-  difficulty: number
-  timestamp: number
-  clientId: string
-  status: 'pending' | 'solving' | 'completed' | 'failed'
-}
-
-export interface Solution {
-  challengeId: string
-  nonce: string
-  hash: string
-  attempts: number
-  timeToSolve: number
-  timestamp: number
-}
-
 export interface Block {
   index: number
   timestamp: number
-  challenge: Challenge
-  solution?: Solution
+  challenge: any
+  solution?: any
   quote?: string
   previousHash: string
   hash: string
@@ -32,19 +14,6 @@ export interface MiningStats {
   averageSolveTime: number
   currentDifficulty: number
   hashRate: number
-  liveConnections?: number
-  totalConnections?: number
-  networkIntensity?: number
-  ddosProtectionActive?: boolean
-  activeMinerCount?: number
-}
-
-export interface ClientConnection {
-  id: string
-  address: string
-  connectedAt: number
-  status: 'connected' | 'solving' | 'disconnected'
-  challengesCompleted: number
 }
 
 export interface MetricsData {

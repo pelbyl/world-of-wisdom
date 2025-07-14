@@ -1,11 +1,22 @@
 import { Stack, Text, Group, Badge, Indicator, ScrollArea } from '@mantine/core'
-import { ClientConnection } from '../types'
+import { ClientConnection } from '../types/api'
+import { useConnections } from '../hooks/useV1API'
 
-interface Props {
-  connections: ClientConnection[]
-}
+interface Props {}
 
-export function ConnectionsPanel({ connections }: Props) {
+export function ConnectionsPanel({}: Props) {
+  const { data: connectionsResponse, loading, error } = useConnections()
+  
+  const connections = connectionsResponse?.status === 'success' && connectionsResponse.data ? connectionsResponse.data.connections : []
+  
+  if (loading) {
+    return <Text c="dimmed" size="sm">Loading connections...</Text>
+  }
+  
+  if (error) {
+    return <Text c="red" size="sm">Error loading connections</Text>
+  }
+  
   if (connections.length === 0) {
     return <Text c="dimmed" size="sm">No active connections</Text>
   }
@@ -13,7 +24,7 @@ export function ConnectionsPanel({ connections }: Props) {
   return (
     <ScrollArea h={200}>
       <Stack gap="xs">
-        {connections.map(connection => (
+        {connections.map((connection: ClientConnection) => (
           <Group key={connection.id} justify="space-between" wrap="nowrap">
             <Group gap="xs" style={{ minWidth: 0 }}>
               <Indicator 
