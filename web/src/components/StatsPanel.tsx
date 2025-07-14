@@ -1,5 +1,5 @@
 import { Stack, Text, Group, RingProgress, ThemeIcon, Paper } from '@mantine/core'
-import { IconActivity, IconClock, IconHash, IconTrendingUp } from '@tabler/icons-react'
+import { IconActivity, IconClock, IconTrendingUp } from '@tabler/icons-react'
 import { MiningStats, MetricsData } from '../types'
 
 interface Props {
@@ -53,17 +53,6 @@ export function StatsPanel({ stats, metrics }: Props) {
         </Group>
       </Paper>
 
-      <Paper withBorder p="xs">
-        <Group gap="xs">
-          <ThemeIcon size="sm" variant="light" color="green">
-            <IconHash size={16} />
-          </ThemeIcon>
-          <div>
-            <Text size="xs" c="dimmed">Hash Rate</Text>
-            <Text fw={500}>{(stats.hashRate / 1000).toFixed(2)} KH/s</Text>
-          </div>
-        </Group>
-      </Paper>
 
       <Paper withBorder p="xs">
         <Group gap="xs">

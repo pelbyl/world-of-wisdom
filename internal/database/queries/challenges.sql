@@ -17,8 +17,8 @@ LIMIT 1;
 
 -- name: UpdateChallengeStatus :one
 UPDATE challenges 
-SET status = $2, solved_at = CASE WHEN $2 = 'completed' THEN NOW() ELSE solved_at END
-WHERE id = $1 
+SET status = @status::challenge_status, solved_at = CASE WHEN @status::challenge_status = 'completed' THEN NOW() ELSE solved_at END
+WHERE id = @id 
 RETURNING *;
 
 -- name: GetRecentChallenges :many

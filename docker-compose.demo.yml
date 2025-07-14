@@ -9,17 +9,15 @@ services:
   client-fast:
     image: world-of-wisdom-client
     environment:
-      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_HOST: server  # Connect to server container
       SERVER_PORT: 8080
       CLIENT_TYPE: fast
       CLIENT_NAME: fast-client
       SOLVE_DELAY_MS: 100
       MAX_ATTEMPTS: 50
       CONNECTION_DELAY_MS: 500
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
-      - wisdom-demo-network
+      - wisdom-network
     restart: unless-stopped
     scale: 0  # Start stopped
 
@@ -27,17 +25,15 @@ services:
   client-normal:
     image: world-of-wisdom-client
     environment:
-      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_HOST: server  # Connect to server container
       SERVER_PORT: 8080
       CLIENT_TYPE: normal
       CLIENT_NAME: normal-client
       SOLVE_DELAY_MS: 1000
       MAX_ATTEMPTS: 20
       CONNECTION_DELAY_MS: 1000
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
-      - wisdom-demo-network
+      - wisdom-network
     restart: unless-stopped
     scale: 0  # Start stopped
 
@@ -45,17 +41,15 @@ services:
   client-slow:
     image: world-of-wisdom-client
     environment:
-      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_HOST: server  # Connect to server container
       SERVER_PORT: 8080
       CLIENT_TYPE: slow
       CLIENT_NAME: slow-client
       SOLVE_DELAY_MS: 3000
       MAX_ATTEMPTS: 10
       CONNECTION_DELAY_MS: 2000
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
-      - wisdom-demo-network
+      - wisdom-network
     restart: unless-stopped
     scale: 0  # Start stopped
 
@@ -63,7 +57,7 @@ services:
   client-attacker:
     image: world-of-wisdom-client
     environment:
-      SERVER_HOST: host.docker.internal  # Connect to host TCP server
+      SERVER_HOST: server  # Connect to server container
       SERVER_PORT: 8080
       CLIENT_TYPE: attacker
       CLIENT_NAME: attacker-client
@@ -72,14 +66,12 @@ services:
       CONNECTION_DELAY_MS: 100
       ATTACK_MODE: "true"
       FLOOD_CONNECTIONS: "true"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
-      - wisdom-demo-network
+      - wisdom-network
     restart: unless-stopped
     scale: 0  # Start stopped
 
 networks:
-  wisdom-demo-network:
-    driver: bridge
-    name: wisdom-demo-network
+  wisdom-network:
+    external: true
+    name: world-of-wisdom_wisdom-network

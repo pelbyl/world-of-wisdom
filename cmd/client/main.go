@@ -50,6 +50,18 @@ func main() {
 
 	c := client.NewClient(*server, *timeout)
 
+	// Configure retry behavior based on client type
+	switch config.ClientType {
+	case "fast":
+		c.SetRetryConfig(5, 1*time.Second)
+	case "normal":
+		c.SetRetryConfig(3, 2*time.Second)
+	case "slow":
+		c.SetRetryConfig(2, 3*time.Second)
+	case "attacker":
+		c.SetRetryConfig(10, 500*time.Millisecond)
+	}
+
 	// Set client behavior based on type
 	switch config.ClientType {
 	case "fast":

@@ -315,18 +315,18 @@ func (q *Queries) GetRecentChallenges(ctx context.Context, db DBTX, limit int32)
 
 const updateChallengeStatus = `-- name: UpdateChallengeStatus :one
 UPDATE challenges 
-SET status = $2, solved_at = CASE WHEN $2 = 'completed' THEN NOW() ELSE solved_at END
-WHERE id = $1 
+SET status = $1::challenge_status, solved_at = CASE WHEN $1::challenge_status = 'completed' THEN NOW() ELSE solved_at END
+WHERE id = $2 
 RETURNING id, seed, difficulty, algorithm, client_id, status, created_at, solved_at, expires_at, argon2_time, argon2_memory, argon2_threads, argon2_keylen
 `
 
 type UpdateChallengeStatusParams struct {
-	ID     pgtype.UUID     `json:"id"`
 	Status ChallengeStatus `json:"status"`
+	ID     pgtype.UUID     `json:"id"`
 }
 
 func (q *Queries) UpdateChallengeStatus(ctx context.Context, db DBTX, arg UpdateChallengeStatusParams) (Challenge, error) {
-	row := db.QueryRow(ctx, updateChallengeStatus, arg.ID, arg.Status)
+	row := db.QueryRow(ctx, updateChallengeStatus, arg.Status, arg.ID)
 	var i Challenge
 	err := row.Scan(
 		&i.ID,

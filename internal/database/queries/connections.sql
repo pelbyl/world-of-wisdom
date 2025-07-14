@@ -16,9 +16,9 @@ LIMIT 1;
 
 -- name: UpdateConnectionStatus :one
 UPDATE connections 
-SET status = $2, 
-    disconnected_at = CASE WHEN $2 = 'disconnected' THEN NOW() ELSE disconnected_at END
-WHERE id = $1 
+SET status = @status::connection_status, 
+    disconnected_at = CASE WHEN @status::connection_status = 'disconnected' THEN NOW() ELSE disconnected_at END
+WHERE id = @id 
 RETURNING *;
 
 -- name: UpdateConnectionStats :one
@@ -43,7 +43,7 @@ LIMIT $1;
 -- name: GetConnectionStats :one
 SELECT 
     COUNT(*) as total_connections,
-    COUNT(CASE WHEN status = 'connected' THEN 1 END) as active_connections,
+    COUNT(CASE WHEN status IN ('connected', 'solving') THEN 1 END) as active_connections,
     AVG(challenges_completed) as avg_challenges_completed,
     AVG(total_solve_time_ms) as avg_solve_time_ms
 FROM connections 

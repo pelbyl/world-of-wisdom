@@ -1,0 +1,150 @@
+version: '3.8'
+
+services:
+  # Aggressive clients that create DDoS-like scenario
+  ddos-client-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=50  # Very aggressive - 50ms between requests
+      - CLIENT_NAME=ddos-1
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  ddos-client-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=50
+      - CLIENT_NAME=ddos-2
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  ddos-client-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=100
+      - CLIENT_NAME=ddos-3
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  ddos-client-4:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=100
+      - CLIENT_NAME=ddos-4
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  ddos-client-5:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=100
+      - CLIENT_NAME=ddos-5
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # Burst attackers - connect very aggressively
+  burst-attacker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=25  # Extremely aggressive
+      - CLIENT_NAME=burst-1
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  burst-attacker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=25
+      - CLIENT_NAME=burst-2
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  burst-attacker-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=25
+      - CLIENT_NAME=burst-3
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # Slow legitimate clients mixed in
+  legit-client-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=2000  # Normal client
+      - CLIENT_NAME=legit-1
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  legit-client-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_ADDR=server:8080
+      - CLIENT_DELAY=3000  # Normal client
+      - CLIENT_NAME=legit-2
+    networks:
+      - wisdom-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+networks:
+  wisdom-network:
+    external: true
+    name: world-of-wisdom_default

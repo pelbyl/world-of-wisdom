@@ -1,7 +1,7 @@
 import { Paper, Title, Grid, Group, Badge, Text, Stack, RingProgress, ThemeIcon, Loader, Alert, Progress } from '@mantine/core'
 import { LineChart, AreaChart } from '@mantine/charts'
 import { IconShield, IconClock, IconNetwork, IconInfoCircle, IconRefresh } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useStats } from '../hooks/useAPI'
 import { StatsData } from '../types/api'
 
@@ -20,6 +20,9 @@ interface MetricsData {
 export function MetricsDashboard() {
   const { data: statsResponse, loading, error } = useStats({ interval: 1000 }) // 1s polling for stats
   const [metricsHistory, setMetricsHistory] = useState<MetricsData[]>([])
+  const difficultyChartRef = useRef<HTMLDivElement>(null)
+  const solveTimeChartRef = useRef<HTMLDivElement>(null)
+  const connectionChartRef = useRef<HTMLDivElement>(null)
 
   const stats: StatsData | null = statsResponse?.status === 'success' ? statsResponse.data ?? null : null;
 
@@ -39,11 +42,13 @@ export function MetricsDashboard() {
       };
       setMetricsHistory(prev => {
         const newHistory = [...prev, metrics];
-        // Keep last 50 data points
-        return newHistory.slice(-50);
+        // Keep all historical data
+        return newHistory;
       });
     }
   }, [stats]);
+
+  // Remove auto-scroll - charts will fit in container
 
   if (loading || !stats) {
     return (
@@ -101,12 +106,14 @@ export function MetricsDashboard() {
     ? (currentMetrics.puzzlesSolvedTotal / (currentMetrics.puzzlesSolvedTotal + currentMetrics.puzzlesFailedTotal)) * 100
     : 0
 
-  const lineChartData = metricsHistory.map((m, index) => ({
-    time: index,
+  const lineChartData = metricsHistory.map((m) => ({
+    time: new Date(m.timestamp).toLocaleTimeString(),
+    timestamp: m.timestamp,
     difficulty: m.currentDifficulty,
     solveTime: m.averageSolveTime,
     connectionRate: m.connectionRate,
-    connections: m.connectionsTotal
+    connections: m.connectionsTotal,
+    activeConnections: m.activeConnections
   }))
 
   // Format average solve time: show in seconds if > 1000ms, otherwise milliseconds
@@ -171,10 +178,10 @@ export function MetricsDashboard() {
               <Group justify="apart">
                 <div>
                   <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                    Total Connections
+                    Active Connections
                   </Text>
                   <Text fw={700} size="xl">
-                    {currentMetrics.connectionsTotal}
+                    {currentMetrics.activeConnections}
                   </Text>
                 </div>
                 <ThemeIcon color="blue" variant="light" size={38} radius="md">
@@ -182,7 +189,7 @@ export function MetricsDashboard() {
                 </ThemeIcon>
               </Group>
               <Text size="xs" c="dimmed" mt="sm">
-                Active: {currentMetrics.activeConnections}
+                Total: {currentMetrics.connectionsTotal}
               </Text>
             </Paper>
           </Grid.Col>
@@ -238,72 +245,84 @@ export function MetricsDashboard() {
         <Grid.Col span={{ base: 12, md: 4 }}>
           <Paper p="md" withBorder>
             <Title order={4} mb="md">Difficulty Trend</Title>
-            {metricsHistory.length > 1 ? (
-              <LineChart
-                h={200}
-                data={lineChartData}
-                dataKey="time"
-                series={[
-                  { name: 'difficulty', color: 'blue.6', label: 'Difficulty Level' }
-                ]}
-                curveType="linear"
-                withLegend
-                withDots={false}
-                yAxisProps={{ domain: [1, 8] }}
-              />
-            ) : (
-              <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
-            )}
+            <div ref={difficultyChartRef} style={{ maxWidth: '100%' }}>
+              {metricsHistory.length > 1 ? (
+                <LineChart
+                  h={200}
+                  w="100%"
+                  data={lineChartData}
+                  dataKey="time"
+                  xAxisLabel=""
+                  series={[
+                    { name: 'difficulty', color: 'blue.6', label: 'Difficulty Level' }
+                  ]}
+                  curveType="linear"
+                  withLegend
+                  withDots={false}
+                  yAxisProps={{ domain: [1, 8] }}
+                />
+              ) : (
+                <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
+              )}
+            </div>
           </Paper>
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 4 }}>
           <Paper p="md" withBorder>
             <Title order={4} mb="md">Solve Time Trend</Title>
-            {metricsHistory.length > 1 ? (
-              <LineChart
-                h={200}
-                data={lineChartData}
-                dataKey="time"
-                series={[
-                  {
-                    name: 'solveTime',
-                    color: 'red.6',
-                    label: 'Solve Time (ms)'
-                  }
-                ]}
-                curveType="linear"
-                withLegend
-                withDots={false}
-                yAxisProps={{
-                  domain: ['dataMin', 'dataMax'],
-                  tickFormatter: (value: number) => `${value.toFixed(1)} ms`,
-                }}
-              />
-            ) : (
-              <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
-            )}
+            <div ref={solveTimeChartRef} style={{ maxWidth: '100%' }}>
+              {metricsHistory.length > 1 ? (
+                <LineChart
+                  h={200}
+                  w="100%"
+                  data={lineChartData}
+                  dataKey="time"
+                  xAxisLabel=""
+                  series={[
+                    {
+                      name: 'solveTime',
+                      color: 'red.6',
+                      label: 'Solve Time (ms)'
+                    }
+                  ]}
+                  curveType="linear"
+                  withLegend
+                  withDots={false}
+                  yAxisProps={{
+                    domain: ['dataMin', 'dataMax'],
+                    tickFormatter: (value: number) => `${value.toFixed(1)} ms`,
+                  }}
+                />
+              ) : (
+                <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
+              )}
+            </div>
           </Paper>
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 4 }}>
           <Paper p="md" withBorder>
             <Title order={4} mb="md">Connection Activity</Title>
-            {metricsHistory.length > 1 ? (
-              <AreaChart
-                h={200}
-                data={lineChartData}
-                dataKey="time"
-                series={[
-                  { name: 'connectionRate', color: 'green.6', label: 'Rate/min' },
-                  { name: 'connections', color: 'blue.6', label: 'Total' }
-                ]}
-                withLegend
-                withDots={false}
-              />
-            ) : (
-              <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
-            )}
+            <div ref={connectionChartRef} style={{ maxWidth: '100%' }}>
+              {metricsHistory.length > 1 ? (
+                <AreaChart
+                  h={200}
+                  w="100%"
+                  data={lineChartData}
+                  dataKey="time"
+                  xAxisLabel=""
+                  series={[
+                    { name: 'connections', color: 'blue.6', label: 'Total Connections' },
+                    { name: 'activeConnections', color: 'green.6', label: 'Active' }
+                  ]}
+                  withLegend
+                  withDots={false}
+                />
+              ) : (
+                <Text c="dimmed" ta="center" py="xl">Collecting data...</Text>
+              )}
+            </div>
           </Paper>
         </Grid.Col>
       </Grid>

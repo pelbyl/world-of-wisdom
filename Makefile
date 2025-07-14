@@ -26,18 +26,47 @@ clean-all:
 	go clean -cache -modcache -i -r || true
 	@echo "✅ Full cleanup complete!"
 
-# Simple demo commands
+# Demo commands using docker-compose
 demo:
-	@echo "🚀 Starting demo containers..."
-	@curl -s -X POST http://localhost:8081/api/v1/demo/scenario \
-		-H "Content-Type: application/json" \
-		-d '{"scenario": "normal"}' | jq -r 'if .status == "success" then "✅ Started demo containers" else "❌ Error: \(.message // "Failed to start")" end'
+	@echo "🚀 Starting demo client containers..."
+	@echo "Starting fast clients (1x), normal clients (2x), and slow clients (1x)..."
+	docker-compose -f docker-compose.demo.yml up -d --scale client-fast=1 --scale client-normal=2 --scale client-slow=1
+	@echo "✅ Demo clients started!"
 	@echo "📊 Monitor at http://localhost:3000"
-	@echo "📝 Check logs: docker logs world-of-wisdom-server-1 -f"
+	@echo "📝 Check server logs: docker logs world-of-wisdom-server-1 -f"
+	@echo "📝 Check client logs: docker-compose -f docker-compose.demo.yml logs -f"
 
 demo-stop:
 	@echo "🛑 Stopping demo containers..."
-	@curl -s -X POST http://localhost:8081/api/v1/demo/stop | jq -r 'if .status == "success" then "✅ Stopped" else "❌ Error: \(.message // "Failed to stop")" end'
+	docker-compose -f docker-compose.demo.yml down
+	@echo "✅ Demo clients stopped!"
+
+demo-logs:
+	@echo "📝 Showing demo client logs..."
+	docker-compose -f docker-compose.demo.yml logs -f
+
+demo-status:
+	@echo "📊 Demo container status:"
+	docker-compose -f docker-compose.demo.yml ps
+
+# DDoS demo scenario
+demo-ddos:
+	@echo "⚠️  Starting DDoS demo scenario..."
+	@echo "This will create 10 clients (8 aggressive attackers + 2 legitimate)"
+	@echo "Watch the adaptive difficulty increase in the dashboard!"
+	docker-compose -f docker-compose.ddos.yml up -d
+	@echo "✅ DDoS demo started!"
+	@echo "📊 Monitor at http://localhost:3000"
+	@echo "📝 Use 'make demo-ddos-logs' to view attack logs"
+
+demo-ddos-stop:
+	@echo "🛑 Stopping DDoS demo..."
+	docker-compose -f docker-compose.ddos.yml down
+	@echo "✅ DDoS demo stopped."
+
+demo-ddos-logs:
+	@echo "📝 Showing DDoS demo logs..."
+	docker-compose -f docker-compose.ddos.yml logs -f
 
 # Code generation targets
 generate: sqlc oapi-codegen

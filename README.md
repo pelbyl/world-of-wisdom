@@ -13,48 +13,39 @@ cp .env.example .env
 # Start complete system with docker-compose
 docker-compose up -d
 
+# Run demo with multiple clients
+make demo
+
 # Access services
-# - Web UI: http://localhost:3000  
+# - Web Dashboard: http://localhost:3000  
 # - TCP Server: localhost:8080
-# - WebSocket + REST API: http://localhost:8081
+# - REST API: http://localhost:8081
 ```
 
 ## ✨ Features
 
-- **🛡️ Advanced Security**: Argon2 memory-hard PoW puzzles with adaptive difficulty
-- **💾 Data Persistence**: PostgreSQL for metrics and application data
-- **📊 Real-time Monitoring**: Interactive React dashboard with live WebSocket updates
+- **🛡️ Security**: Argon2 memory-hard PoW puzzles with adaptive difficulty
+- **💾 Data Persistence**: PostgreSQL TimescaleDB for metrics and application data (with sqlc-generated queries)
+- **📊 Real-time Monitoring**: Mantine UI dashboard with Polling
 - **🚀 REST API**: Type-safe database operations with sqlc-generated queries
 - **🔄 Auto-Recovery**: Robust error handling with automatic reconnection
 - **🐳 Docker Ready**: Simple docker-compose setup for local development
 
 ## ⚙️ Environment Configuration
 
-The application uses environment variables for configuration management. To get started:
-
-1. **Copy the example environment file:**
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Edit the .env file** to customize your setup if needed
-
-3. **Start the services:**
-   ```bash
-   docker-compose up -d
-   ```
+The application uses environment variables for configuration management.
 
 The `.env` file contains all configurable variables with sensible defaults:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SERVER_PORT` | 8080 | TCP server port |
-| `WEBSERVER_PORT` | 8081 | REST API server port |
+| `API_SERVER_PORT` | 8081 | REST API server port |
 | `WEB_PORT` | 3000 | Frontend port |
-| `API_BASE_URL` | http://localhost:8081/api/v1 | API endpoint URL |
 | `POSTGRES_*` | Various | Database configuration |
 | `ALGORITHM` | argon2 | PoW algorithm (sha256/argon2) |
 | `DIFFICULTY` | 2 | Mining difficulty |
+| `ADAPTIVE_MODE` | true | Enable adaptive difficulty |
 
 **Note:** Environment variables are automatically loaded by docker-compose from the `.env` file.
 
@@ -114,23 +105,18 @@ The `.env` file contains all configurable variables with sensible defaults:
 The Word of Wisdom system is a simple, clean architecture with three core components running in Docker containers.
 
 ```shell
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                              Word of Wisdom System                               │
-├─────────────┬─────────────┬─────────────┬──────────────────────────────────────────┤
-│   Database  │ TCP Server  │ API Server  │            React Frontend               │
-│   Layer     │ (Port 8080) │ (Port 8081) │            (Port 3000)                  │
-├─────────────┼─────────────┼─────────────┼──────────────────────────────────────────┤
-│             │             │             │                                          │
-│ PostgreSQL  │ ┌─────────┐ │ ┌─────────┐ │ ┌──────────────────────────────────────┐ │
-│             │ │ Argon2  │ │ │WebSocket│ │ │       Interactive Dashboard           │ │
-│             │ │   PoW   │ │ │   API   │ │ │     + Real-time Metrics              │ │
-│             │ │ Engine  │ │ │ Mining  │ │ │     + Blockchain Visualizer          │ │
-│ ┌─────────┐ │ │Adaptive │ │ │  Sim    │ │ │     + Connection Status              │ │
-│ │Metrics  │ │ │ Diff.   │ │ │ Control │ │ │     + Activity Logs                  │ │
-│ │+ Logs   │ │ │ DDoS    │ │ │Real-time│ │ │     + DDoS Protection Status         │ │
-│ │+ Blocks │ │ │Protect. │ │ │Updates  │ │ │     + Mining Controls                │ │
-│ └─────────┘ │ └─────────┘ │ └─────────┘ │ └──────────────────────────────────────┘ │
-└─────────────┴─────────────┴─────────────┴──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                       Word of Wisdom System                          │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│ TCP Server  │    │  Database   │    │ API Server  │    │  Frontend   │
+│             │    │             │    │             │    │             │
+│ Argon2 PoW  │◄──►│ PostgreSQL  │◄──►│ REST API    │◄──►│ React App   │
+│ DDoS Guard  │    │ TimescaleDB │    │             │    │ Dashboard   │
+│ Adaptive    │    │ Metrics     │    │             │    │ Visualizer  │
+│             │    │ Logs        │    │             │    │             │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
 ### Core Components
@@ -195,27 +181,23 @@ type Argon2Challenge struct {
 
 #### 3. **API Server** (Port 8081) - REST API
 
-**REST API:**
+**REST API Features:**
 
-- **Read-Only Database Access**: Serves data to frontend via HTTP endpoints
+- **Database Access**: Serves real-time data to frontend via HTTP endpoints
 - **OpenAPI Specification**: Documented API with typed responses
 - **Real-Time Polling**: Frontend polls for live data updates
-- **Echo Framework**: High-performance HTTP server with middleware
+- **Echo Framework**: High-performance HTTP server with CORS support
 
-**Key Message Types:**
+**Available Endpoints:**
 
-```typescript
-// Client → Server
-{ type: "start_mining", config: MiningConfig }
-{ type: "stop_mining" }
-{ type: "get_state" }
-
-// Server → Client  
-{ type: "block", block: Block }
-{ type: "challenge", challenge: Challenge }
-{ type: "metrics", metrics: MetricsData }
-{ type: "stats", stats: MiningStats }
-{ type: "log", log: LogMessage }
+```openapi
+GET  /health               - Health check
+GET  /api/v1/stats         - System statistics
+GET  /api/v1/challenges    - Challenge list (with filters)
+GET  /api/v1/connections   - Active connections
+GET  /api/v1/metrics       - System metrics
+GET  /api/v1/recent-solves - Recent blockchain blocks
+GET  /api/v1/logs          - Activity logs
 ```
 
 **Database Integration:**
@@ -230,22 +212,19 @@ type Argon2Challenge struct {
 
 ```typescript
 App.tsx                          // Main application container
-├── ConnectionStatus.tsx         // WebSocket connection indicator
-├── BlockchainVisualizer.tsx     // Visual blockchain representation
-├── MiningVisualizer.tsx         // Real-time challenge tracking
-├── MetricsDashboard.tsx         // Live metrics and charts
-├── StatsPanel.tsx               // Performance statistics
-├── LogsPanel.tsx                // Activity logs with search
+├── StatsPanel.tsx               // System statistics
+├── ChallengePanel.tsx           // Active challenges display
 ├── ConnectionsPanel.tsx         // Active client connections
-└── MiningConfigPanel.tsx        // Mining simulation controls
+├── MetricsDashboard.tsx         // Performance metrics
+└── LogsPanel.tsx                // System activity logs
 ```
 
 **Real-Time Features:**
 
-- **WebSocket Integration**: Live updates with automatic reconnection
-- **Persistent State**: All data from database
-- **Interactive Controls**: Start/stop mining, configure parameters
-- **Responsive Design**: Mantine UI components with dark theme
+- **Auto-Refresh**: Real-time data updates via polling
+- **Persistent State**: All data stored in PostgreSQL
+- **Responsive Design**: Clean, modern UI with status indicators
+- **Error Handling**: Automatic retry with graceful degradation
 
 **Key Visualizations:**
 
@@ -283,29 +262,47 @@ ADAPTIVE_MODE=true
 
 ## 📈 Web Dashboard Features
 
-- **📊 Live Metrics**: Real-time difficulty and performance tracking
-- **🔗 Blockchain View**: Visual representation of solved challenges
-- **📋 Activity Logs**: Real-time system activity logs
-- **🔄 Connection Status**: WebSocket state with auto-reconnection
-- **💾 Persistent Stats**: Data survives page refresh
+- **📊 System Stats**: Real-time performance metrics and difficulty tracking
+- **🔍 Challenge Monitor**: View active and completed challenges
+- **👥 Connection Tracking**: Monitor active client connections
+- **📋 Activity Logs**: System event logging with timestamps
+- **💾 Persistent Data**: All data stored in PostgreSQL database
+- **🔄 Auto-refresh**: Real-time updates via API polling
 
-## 🧪 Testing
+## 🧪 Testing & Demo
 
-### Automated Testing
+### Running the Demo
 
 ```bash
-# Unit tests
-go test ./...
-
-# Integration tests  
-go test -v ./tests/
-
-# Start system for testing
+# Start the main system
 docker-compose up -d
 
+# Run demo with multiple client types
+make demo
+
+# Monitor demo activity
+make demo-logs
+
+# Check demo status
+make demo-status
+
+# Stop demo clients
+make demo-stop
+```
+
+### Demo Client Types
+
+- **Fast Clients**: Solve challenges quickly (100ms delay)
+- **Normal Clients**: Standard solve time (1000ms delay)
+- **Slow Clients**: Slower solving (3000ms delay)
+
+### Testing API Endpoints
+
+```bash
 # Test API endpoints
-curl -s "http://localhost:8081/health"
-curl -s "http://localhost:8081/api/challenges" | jq '.'
+curl -s "http://localhost:8081/health" | jq '.'
+curl -s "http://localhost:8081/api/v1/stats" | jq '.'
+curl -s "http://localhost:8081/api/v1/challenges?limit=10" | jq '.'
 ```
 
 ## 🐳 Docker Deployment
@@ -334,102 +331,86 @@ docker-compose down
 world-of-wisdom/
 ├── cmd/                          # Executable entry points
 │   ├── server/                   # TCP server (Argon2 PoW)
-│   ├── client/                   # Test client
+│   ├── client/                   # Demo client
 │   └── apiserver/                # REST API server
 ├── internal/                     # Application logic
 │   ├── server/                   # TCP server implementation
 │   ├── apiserver/                # API server implementation
-│   └── client/                   # Client implementation
-├── api/db/                       # Generated database code (sqlc)
-│   ├── *.sql.go                  # Type-safe database queries
-│   ├── models.go                 # Database models
-│   └── querier.go                # Query interface
+│   ├── client/                   # Client implementation
+│   ├── blockchain/               # Blockchain implementation
+│   └── database/                 # Database layer
+│       ├── generated/            # SQLC generated code
+│       ├── migrations/           # Database schema
+│       ├── queries/              # SQL source files
+│       └── repository/           # Repository pattern
 ├── pkg/                          # Shared libraries
-│   ├── pow/                      # PoW algorithms (Argon2)
-│   ├── database/                 # PostgreSQL integration
-│   ├── config/                   # Environment configuration
+│   ├── pow/                      # PoW algorithms (Argon2/SHA256)
+│   ├── config/                   # Configuration management
+│   ├── metrics/                  # Metrics collection
 │   └── wisdom/                   # Quote management
 ├── web/                          # React frontend
 │   ├── src/
 │   │   ├── components/           # UI components
-│   │   │   ├── BlockchainVisualizer.tsx
+│   │   │   ├── StatsPanel.tsx
+│   │   │   ├── ChallengePanel.tsx
+│   │   │   ├── ConnectionsPanel.tsx
 │   │   │   ├── MetricsDashboard.tsx
-│   │   │   ├── MiningConfigPanel.tsx
-│   │   │   ├── ConnectionStatus.tsx
 │   │   │   └── LogsPanel.tsx
 │   │   ├── hooks/                # Custom React hooks
-│   │   │   └── useWebSocket.ts   # WebSocket with reconnection
+│   │   │   └── useAPI.ts         # API polling hook
 │   │   ├── types/                # TypeScript definitions
-│   │   │   └── index.ts
-│   │   └── utils/                # Utility functions
-│   │       └── api.ts            # API client
-│   ├── package.json              # Frontend dependencies
-│   └── vite.config.ts            # Build configuration
-├── db/                           # Database layer
-│   ├── migrations/               # Database schema
-│   │   ├── 001_init.sql          # Initial schema
-│   │   └── 002_logs.sql          # Logs table
-│   └── queries/                  # SQL queries for sqlc
-│       ├── challenges.sql        # Challenge management
-│       ├── solutions.sql         # Solution tracking
-│       ├── connections.sql       # Client connections
-│       ├── blocks.sql            # Blockchain data
-│       ├── metrics.sql           # System metrics
-│       └── logs.sql              # Activity logs
-├── docs/                         # API documentation
-│   ├── swagger.json              # OpenAPI 3.0 specification
-│   └── swagger.yaml              # YAML format
-├── scripts/                      # Utility scripts
-│   ├── clear-database.sql        # Database cleanup
-│   ├── dev.sh                    # Development setup
-│   └── load-test.sh              # Load testing
-├── tests/                        # Integration tests
-│   └── integration_test.go       # End-to-end testing
+│   │   └── api/                  # API client
+│   └── nginx.conf                # Nginx proxy config
+├── api/                          # API specification
+│   └── openapi.yaml              # OpenAPI 3.0 spec
 ├── images/                       # Documentation assets
-│   ├── arch.jpeg                 # Architecture diagram
-│   └── front-demo.png            # Frontend screenshot
-├── docker-compose.yml            # Main orchestration
-├── sqlc.yaml                     # SQLC configuration
-├── go.mod / go.sum               # Go module dependencies
+├── docker-compose.yml            # Main services
+├── docker-compose.demo.yml       # Demo client setup
+├── Dockerfile.server             # TCP server image
+├── Dockerfile.apiserver          # API server image
+├── Dockerfile.client             # Client image
+├── Dockerfile.web                # Frontend image
 ├── Makefile                      # Build automation
-└── CLAUDE.md                     # Project instructions
+├── .env.example                  # Environment template
+└── README.md                     # This file
 ```
 
 ### Key Directories Explained
 
 **Core Services:**
 
-- `cmd/` - Each subdirectory contains a `main.go` for a specific service
-- `internal/` - Private application code, not importable by other projects
-- `api/db/` - Auto-generated type-safe database code via sqlc
+- `cmd/` - Entry points for server, client, and API server
+- `internal/` - Private application code and business logic
+- `pkg/` - Shared libraries (PoW, config, metrics)
+
+**Database Layer:**
+
+- `internal/database/generated/` - SQLC type-safe query code
+- `internal/database/queries/` - SQL source for code generation
+- `internal/database/repository/` - Clean repository pattern
 
 **Frontend & API:**
 
-- `web/src/components/` - React components with real-time updates
-- `docs/` - Auto-generated OpenAPI documentation
-- `db/queries/` - SQL source files for sqlc code generation
+- `web/` - React dashboard with real-time data display
+- `api/openapi.yaml` - OpenAPI 3.0 specification
+- REST API endpoints for all data access
 
-**Infrastructure:**
+**Docker Infrastructure:**
 
-- `docker-compose.yml` - Complete stack deployment
-- `scripts/` - Development and testing automation
+- `docker-compose.yml` - Main services (server, API, web, DB)
+- `docker-compose.demo.yml` - Demo client orchestration
+- Multiple Dockerfiles for each service
 
-**Database Architecture:**
+## 🔄 Key Features & Improvements
 
-- PostgreSQL for all data storage
-- Type-safe queries with sqlc
-- Clean migrations and schema
-
-## 🔄 Recent Improvements
-
-- ✅ **Enhanced Security**: SHA-256 → Argon2 memory-hard PoW
-- ✅ **Database Integration**: PostgreSQL with SQLC type-safe queries
-- ✅ **Frontend Stability**: Persistent stats, enhanced logs, auto-recovery
-- ✅ **Live Metrics**: Real-time difficulty tracking and updates
-- ✅ **WebSocket Resilience**: Auto-reconnection and graceful degradation
-- ✅ **REST API**: Type-safe database operations with comprehensive endpoints
-- ✅ **OpenAPI Documentation**: Interactive Swagger UI with complete API specs
-- ✅ **Docker Ready**: Simple docker-compose setup for local development
+- ✅ **Argon2 PoW**: Memory-hard proof-of-work for DDoS protection
+- ✅ **PostgreSQL Integration**: Full database persistence with type-safe queries
+- ✅ **REST API**: Comprehensive endpoints with OpenAPI documentation
+- ✅ **Real-time Dashboard**: Live metrics and system monitoring
+- ✅ **Demo System**: Multiple client types for testing and demonstration
+- ✅ **Docker Compose**: Complete containerized deployment
+- ✅ **CORS Support**: Proper cross-origin request handling
+- ✅ **Adaptive Difficulty**: Dynamic adjustment based on network conditions
 
 ### 🖼️ Frontend Demo
 

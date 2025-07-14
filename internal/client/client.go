@@ -15,12 +15,16 @@ import (
 type Client struct {
 	serverAddr string
 	timeout    time.Duration
+	maxRetries int
+	retryDelay time.Duration
 }
 
 func NewClient(serverAddr string, timeout time.Duration) *Client {
 	return &Client{
 		serverAddr: serverAddr,
 		timeout:    timeout,
+		maxRetries: 3,
+		retryDelay: 2 * time.Second,
 	}
 }
 
@@ -29,6 +33,23 @@ func (c *Client) GetServer() string {
 }
 
 func (c *Client) RequestQuote() (string, error) {
+	return c.requestQuoteWithRetry(c.maxRetries)
+}
+
+func (c *Client) requestQuoteWithRetry(retriesLeft int) (string, error) {
+	quote, err := c.attemptRequestQuote()
+	if err != nil {
+		if retriesLeft > 0 {
+			log.Printf("Request failed: %v. Retrying in %v... (%d retries left)", err, c.retryDelay, retriesLeft)
+			time.Sleep(c.retryDelay)
+			return c.requestQuoteWithRetry(retriesLeft - 1)
+		}
+		return "", fmt.Errorf("failed after %d retries: %w", c.maxRetries, err)
+	}
+	return quote, nil
+}
+
+func (c *Client) attemptRequestQuote() (string, error) {
 	conn, err := net.DialTimeout("tcp", c.serverAddr, c.timeout)
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to server: %w", err)
@@ -103,6 +124,12 @@ func (c *Client) RequestQuote() (string, error) {
 	}
 
 	return response, nil
+}
+
+// SetRetryConfig allows customizing retry behavior
+func (c *Client) SetRetryConfig(maxRetries int, retryDelay time.Duration) {
+	c.maxRetries = maxRetries
+	c.retryDelay = retryDelay
 }
 
 func parseChallenge(challenge string) (seed string, difficulty int, err error) {

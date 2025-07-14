@@ -137,7 +137,7 @@ func (q *Queries) GetConnectionByClientID(ctx context.Context, db DBTX, clientID
 const getConnectionStats = `-- name: GetConnectionStats :one
 SELECT 
     COUNT(*) as total_connections,
-    COUNT(CASE WHEN status = 'connected' THEN 1 END) as active_connections,
+    COUNT(CASE WHEN status IN ('connected', 'solving') THEN 1 END) as active_connections,
     AVG(challenges_completed) as avg_challenges_completed,
     AVG(total_solve_time_ms) as avg_solve_time_ms
 FROM connections 
@@ -294,19 +294,19 @@ func (q *Queries) UpdateConnectionStats(ctx context.Context, db DBTX, arg Update
 
 const updateConnectionStatus = `-- name: UpdateConnectionStatus :one
 UPDATE connections 
-SET status = $2, 
-    disconnected_at = CASE WHEN $2 = 'disconnected' THEN NOW() ELSE disconnected_at END
-WHERE id = $1 
+SET status = $1::connection_status, 
+    disconnected_at = CASE WHEN $1::connection_status = 'disconnected' THEN NOW() ELSE disconnected_at END
+WHERE id = $2 
 RETURNING id, client_id, remote_addr, status, algorithm, connected_at, disconnected_at, challenges_attempted, challenges_completed, total_solve_time_ms
 `
 
 type UpdateConnectionStatusParams struct {
-	ID     pgtype.UUID      `json:"id"`
 	Status ConnectionStatus `json:"status"`
+	ID     pgtype.UUID      `json:"id"`
 }
 
 func (q *Queries) UpdateConnectionStatus(ctx context.Context, db DBTX, arg UpdateConnectionStatusParams) (Connection, error) {
-	row := db.QueryRow(ctx, updateConnectionStatus, arg.ID, arg.Status)
+	row := db.QueryRow(ctx, updateConnectionStatus, arg.Status, arg.ID)
 	var i Connection
 	err := row.Scan(
 		&i.ID,

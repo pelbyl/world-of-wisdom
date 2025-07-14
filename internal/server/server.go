@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -143,6 +144,30 @@ func (s *Server) handleConnection(conn net.Conn) {
 	clientAddr := conn.RemoteAddr().String()
 	clientID := s.generateClientID(clientAddr)
 	log.Printf("New connection from %s (Client ID: %s)", clientAddr, clientID)
+	
+	// Context for database operations
+	ctx := context.Background()
+	
+	// Track connection record for cleanup
+	var connectionRecord generated.Connection
+	defer func() {
+		// Always mark connection as disconnected when handler exits
+		if connectionRecord.ID != (pgtype.UUID{}) {
+			s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
+			s.logActivity(ctx, "info", fmt.Sprintf("Client disconnected: %s", clientAddr), map[string]interface{}{
+				"client_id": clientID,
+				"event":     "connection_closed",
+			})
+			log.Printf("Client %s disconnected (cleanup)", clientAddr)
+		}
+	}()
+
+	// Log new connection
+	s.logActivity(context.Background(), "info", fmt.Sprintf("New connection from %s", clientAddr), map[string]interface{}{
+		"client_id":   clientID,
+		"remote_addr": clientAddr,
+		"event":       "connection_established",
+	})
 
 	// Parse remote address
 	remoteAddr, err := netip.ParseAddr(strings.Split(clientAddr, ":")[0])
@@ -152,8 +177,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	// Create connection record in database
-	ctx := context.Background()
-	connectionRecord, err := s.logConnection(ctx, clientID, remoteAddr, s.algorithm)
+	connectionRecord, err = s.logConnection(ctx, clientID, remoteAddr, s.algorithm)
 	if err != nil {
 		log.Printf("Failed to log connection: %v", err)
 		// Continue anyway - don't fail the connection due to DB issues
@@ -222,6 +246,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
 	if !scanner.Scan() {
 		log.Printf("Client %s disconnected or timed out", clientAddr)
+		
+		// Log disconnection
+		s.logActivity(ctx, "warning", fmt.Sprintf("Client disconnected: %s", clientAddr), map[string]interface{}{
+			"client_id": clientID,
+			"event":     "client_disconnected",
+			"reason":    "timeout_or_disconnect",
+		})
+		
 		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
 		if challengeRecord.ID != (pgtype.UUID{}) {
 			s.updateChallengeStatus(ctx, challengeRecord.ID, generated.ChallengeStatusExpired)
@@ -235,6 +267,15 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if verifySolution(response) {
 		log.Printf("Client %s solved the %s challenge in %v", clientAddr, s.algorithm, solveTime)
 		s.recordSolveTime(solveTime)
+
+		// Log successful solution
+		s.logActivity(ctx, "success", fmt.Sprintf("Challenge solved by %s", clientAddr), map[string]interface{}{
+			"client_id":   clientID,
+			"solve_time":  solveTime.Milliseconds(),
+			"difficulty":  difficulty,
+			"algorithm":   s.algorithm,
+			"event":       "challenge_solved",
+		})
 
 		// Log successful solution to database
 		if challengeRecord.ID != (pgtype.UUID{}) {
@@ -251,6 +292,15 @@ func (s *Server) handleConnection(conn net.Conn) {
 	} else {
 		log.Printf("Client %s failed the %s challenge", clientAddr, s.algorithm)
 
+		// Log failed challenge
+		s.logActivity(ctx, "warning", fmt.Sprintf("Challenge failed by %s", clientAddr), map[string]interface{}{
+			"client_id":   clientID,
+			"solve_time":  solveTime.Milliseconds(),
+			"difficulty":  difficulty,
+			"algorithm":   s.algorithm,
+			"event":       "challenge_failed",
+		})
+
 		// Log failed solution to database
 		if challengeRecord.ID != (pgtype.UUID{}) {
 			s.logSolution(ctx, challengeRecord.ID, response, false, solveTime)
@@ -263,9 +313,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		conn.Write([]byte("Error: Invalid proof of work\n"))
 	}
-
-	// Update final connection status
-	s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
+	
+	// Connection status will be updated by defer
 }
 
 func (s *Server) getDifficulty() int {
@@ -431,6 +480,26 @@ func (s *Server) Addr() string {
 
 func (s *Server) generateClientID(clientAddr string) string {
 	return uuid.New().String()
+}
+
+func (s *Server) logActivity(ctx context.Context, level, message string, metadata map[string]interface{}) {
+	// Convert metadata to JSONB
+	var metadataJSON []byte
+	if metadata != nil {
+		metadataJSON, _ = json.Marshal(metadata)
+	}
+	
+	params := generated.CreateLogParams{
+		Column1:  pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		Level:    level,
+		Message:  message,
+		Metadata: metadataJSON,
+	}
+	
+	_, err := s.queries.CreateLog(ctx, s.dbpool, params)
+	if err != nil {
+		log.Printf("Failed to create log entry: %v", err)
+	}
 }
 
 func (s *Server) logConnection(ctx context.Context, clientID string, remoteAddr netip.Addr, algorithm string) (generated.Connection, error) {
