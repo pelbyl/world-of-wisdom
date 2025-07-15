@@ -95,8 +95,8 @@ func (c *SecureChallenge) ToBinary() ([]byte, error) {
 	}
 	copy(bc.signature[:], signature)
 	
-	// Base structure (59 bytes)
-	result := make([]byte, 59)
+	// Base structure (75 bytes: 3+16+16+8+32)
+	result := make([]byte, 75)
 	copy(result[0:3], bc.header[:])
 	copy(result[3:19], bc.timestamps[:])
 	copy(result[19:35], bc.seed[:])
@@ -119,8 +119,8 @@ func (c *SecureChallenge) ToBinary() ([]byte, error) {
 
 // FromBinary creates a SecureChallenge from binary data
 func SecureChallengeFromBinary(data []byte, clientID string) (*SecureChallenge, error) {
-	if len(data) < 59 {
-		return nil, fmt.Errorf("binary data too short: expected at least 59 bytes, got %d", len(data))
+	if len(data) < 75 {
+		return nil, fmt.Errorf("binary data too short: expected at least 75 bytes, got %d", len(data))
 	}
 	
 	challenge := &SecureChallenge{
@@ -156,8 +156,8 @@ func SecureChallengeFromBinary(data []byte, clientID string) (*SecureChallenge, 
 	
 	// Parse Argon2 parameters if present
 	if challenge.Algorithm == "argon2" {
-		if len(data) < 69 {
-			return nil, fmt.Errorf("binary data too short for Argon2 challenge: expected at least 69 bytes, got %d", len(data))
+		if len(data) < 85 {
+			return nil, fmt.Errorf("binary data too short for Argon2 challenge: expected at least 85 bytes, got %d", len(data))
 		}
 		
 		challenge.Argon2Params = &Argon2Params{
@@ -325,7 +325,7 @@ func NewCompressedChallengeTransport(enableCompression bool) *CompressedChalleng
 }
 
 // GetFormatStats returns statistics about format efficiency
-func GetFormatStats(challenge *SecureChallenge) (map[string]interface{}, error) {
+func GetFormatStats(challenge *SecureChallenge) (map[string]any, error) {
 	jsonData, err := json.Marshal(challenge)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
@@ -339,7 +339,7 @@ func GetFormatStats(challenge *SecureChallenge) (map[string]interface{}, error) 
 	jsonSize := len(jsonData)
 	binarySize := len(binaryData)
 	
-	return map[string]interface{}{
+	return map[string]any{
 		"json_size":           jsonSize,
 		"binary_size":         binarySize,
 		"compression_ratio":   float64(binarySize) / float64(jsonSize),

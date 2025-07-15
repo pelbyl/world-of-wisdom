@@ -1,7 +1,6 @@
 package pow
 
 import (
-	"crypto/subtle"
 	"fmt"
 	"time"
 )
@@ -293,10 +292,6 @@ func (v *ValidationPipeline) SetRateLimitConfig(window time.Duration, maxRequest
 	v.maxRequestsPerWindow = maxRequests
 }
 
-// constantTimeVerify performs constant-time signature verification
-func constantTimeVerify(sig1, sig2 []byte) bool {
-	return subtle.ConstantTimeCompare(sig1, sig2) == 1
-}
 
 // BatchValidate validates multiple solutions concurrently
 func (v *ValidationPipeline) BatchValidate(solutions []*Solution) []*ValidationResult {
@@ -319,7 +314,7 @@ func (v *ValidationPipeline) BatchValidate(solutions []*Solution) []*ValidationR
 	}
 	
 	// Collect results
-	for i := 0; i < len(solutions); i++ {
+	for range len(solutions) {
 		res := <-resultChan
 		results[res.index] = res.result
 	}

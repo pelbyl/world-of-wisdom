@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -47,16 +48,24 @@ type Server struct {
 
 	// Client behavior tracking
 	behaviorTracker *behavior.Tracker
+	
+	// HMAC signing key for secure challenges
+	signingKey []byte
+	
+	// Challenge protocol format
+	challengeFormat pow.ChallengeFormat // "json" or "binary"
+	challengeEncoder *pow.ChallengeEncoder
 }
 
 type Config struct {
-	Port         string
-	Difficulty   int
-	Timeout      time.Duration
-	AdaptiveMode bool
-	MetricsPort  string
-	Algorithm    string // "sha256" or "argon2"
-	DatabaseURL  string
+	Port            string
+	Difficulty      int
+	Timeout         time.Duration
+	AdaptiveMode    bool
+	MetricsPort     string
+	Algorithm       string // "sha256" or "argon2"
+	DatabaseURL     string
+	ChallengeFormat string // "json" or "binary"
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -100,24 +109,42 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("invalid algorithm: %s (must be sha256 or argon2)", algorithm)
 	}
 
+	// Generate a signing key for secure challenges
+	signingKey := make([]byte, 32)
+	if _, err := rand.Read(signingKey); err != nil {
+		return nil, fmt.Errorf("failed to generate signing key: %w", err)
+	}
+
+	// Default to binary format if not specified
+	challengeFormat := pow.ChallengeFormat(cfg.ChallengeFormat)
+	if challengeFormat == "" {
+		challengeFormat = pow.FormatBinary
+	}
+	if challengeFormat != pow.FormatJSON && challengeFormat != pow.FormatBinary {
+		return nil, fmt.Errorf("invalid challenge format: %s (must be json or binary)", challengeFormat)
+	}
+
 	return &Server{
-		listener:        listener,
-		quoteProvider:   wisdom.NewQuoteProvider(),
-		difficulty:      cfg.Difficulty,
-		timeout:         cfg.Timeout,
-		shutdownChan:    make(chan struct{}),
-		dbpool:          dbpool,
-		queries:         generated.New(),
-		solveTimes:      make([]time.Duration, 0, 100),
-		lastAdjustment:  time.Now(),
-		adaptiveMode:    cfg.AdaptiveMode,
-		algorithm:       algorithm,
-		behaviorTracker: behavior.NewTracker(dbpool),
+		listener:         listener,
+		quoteProvider:    wisdom.NewQuoteProvider(),
+		difficulty:       cfg.Difficulty,
+		timeout:          cfg.Timeout,
+		shutdownChan:     make(chan struct{}),
+		dbpool:           dbpool,
+		queries:          generated.New(),
+		solveTimes:       make([]time.Duration, 0, 100),
+		lastAdjustment:   time.Now(),
+		adaptiveMode:     cfg.AdaptiveMode,
+		algorithm:        algorithm,
+		behaviorTracker:  behavior.NewTracker(dbpool),
+		signingKey:       signingKey,
+		challengeFormat:  challengeFormat,
+		challengeEncoder: pow.NewChallengeEncoder(challengeFormat),
 	}, nil
 }
 
 func (s *Server) Start() error {
-	log.Printf("Server listening on %s with difficulty %d", s.listener.Addr(), s.difficulty)
+	log.Printf("Server listening on %s with difficulty %d (format: %s)", s.listener.Addr(), s.difficulty, s.challengeFormat)
 
 	// Start periodic behavior stats logging
 	go s.logBehaviorStats()
@@ -273,38 +300,55 @@ func (s *Server) handleConnection(conn net.Conn) {
 		})
 	}
 
-	// Generate challenge based on algorithm
-	var challengeStr string
-	var verifySolution func(string) bool
+	// Generate secure JSON challenge
+	var secureChallenge *pow.SecureChallenge
 	var challengeSeed string
+	var verifySolution func(string) bool
 
+	// Use secure challenge generation with JSON format
+	secureChallenge, err = pow.GenerateSecureChallenge(difficulty, s.algorithm, clientID, s.signingKey)
+	if err != nil {
+		log.Printf("Failed to generate secure challenge: %v", err)
+		conn.Write([]byte("Error: Failed to generate challenge\n"))
+		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
+		return
+	}
+	
+	challengeSeed = secureChallenge.Seed
+	
+	// Set up verification function based on algorithm
 	if s.algorithm == "sha256" {
-		challenge, err := pow.GenerateChallenge(difficulty)
-		if err != nil {
-			log.Printf("Failed to generate challenge: %v", err)
-			conn.Write([]byte("Error: Failed to generate challenge\n"))
-			s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
-			return
-		}
-		challengeStr = challenge.String()
-		challengeSeed = challenge.Seed
 		verifySolution = func(response string) bool {
-			return pow.VerifyPoW(challenge.Seed, response, challenge.Difficulty)
+			return pow.VerifyPoW(secureChallenge.Seed, response, secureChallenge.Difficulty)
 		}
 	} else {
-		challenge, err := pow.GenerateArgon2Challenge(difficulty)
-		if err != nil {
-			log.Printf("Failed to generate Argon2 challenge: %v", err)
-			conn.Write([]byte("Error: Failed to generate challenge\n"))
-			s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
-			return
-		}
-		challengeStr = challenge.String()
-		challengeSeed = challenge.Seed
+		// For Argon2, we need to verify with the secure challenge
 		verifySolution = func(response string) bool {
-			return pow.VerifyArgon2PoW(challenge, response)
+			// Create an Argon2Challenge from the SecureChallenge for verification
+			argon2Challenge := &pow.Argon2Challenge{
+				Seed:       secureChallenge.Seed,
+				Difficulty: secureChallenge.Difficulty,
+			}
+			if secureChallenge.Argon2Params != nil {
+				argon2Challenge.Time = secureChallenge.Argon2Params.Time
+				argon2Challenge.Memory = secureChallenge.Argon2Params.Memory
+				argon2Challenge.Threads = secureChallenge.Argon2Params.Threads
+				argon2Challenge.KeyLen = secureChallenge.Argon2Params.KeyLength
+			}
+			return pow.VerifyArgon2PoW(argon2Challenge, response)
 		}
 	}
+	
+	// Encode challenge using configured format
+	challengeData, err := s.challengeEncoder.Encode(secureChallenge, s.challengeFormat)
+	if err != nil {
+		log.Printf("Failed to encode challenge: %v", err)
+		conn.Write([]byte("Error: Failed to generate challenge\n"))
+		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
+		return
+	}
+	
+	log.Printf("Sending %s challenge to %s (size: %d bytes)", s.challengeFormat, clientAddr, len(challengeData))
 
 	// Log challenge to database
 	challengeRecord, err := s.logChallenge(ctx, challengeSeed, int32(difficulty), s.algorithm, clientID)
@@ -316,7 +360,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Update connection status to solving
 	s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusSolving)
 
-	_, err = conn.Write([]byte(challengeStr + "\n"))
+	_, err = conn.Write(append(challengeData, '\n'))
 	if err != nil {
 		log.Printf("Failed to send challenge to %s: %v", clientAddr, err)
 		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)

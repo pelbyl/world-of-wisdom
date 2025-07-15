@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ type Client struct {
 	timeout    time.Duration
 	maxRetries int
 	retryDelay time.Duration
+	encoder    *pow.ChallengeEncoder
 }
 
 func NewClient(serverAddr string, timeout time.Duration) *Client {
@@ -25,6 +25,7 @@ func NewClient(serverAddr string, timeout time.Duration) *Client {
 		timeout:    timeout,
 		maxRetries: 3,
 		retryDelay: 2 * time.Second,
+		encoder:    pow.NewChallengeEncoder(pow.FormatBinary), // Default to binary
 	}
 }
 
@@ -63,46 +64,53 @@ func (c *Client) attemptRequestQuote() (string, error) {
 		return "", fmt.Errorf("failed to receive challenge from server")
 	}
 
-	challengeStr := scanner.Text()
-	log.Printf("Received challenge: %s", challengeStr)
+	challengeData := scanner.Bytes()
+	log.Printf("Received challenge data: %d bytes", len(challengeData))
 
-	// Determine algorithm based on challenge format
+	// Auto-detect format and decode challenge
+	format := c.encoder.AutoDetectFormat(challengeData)
+	log.Printf("Detected challenge format: %s", format)
+	
+	secureChallenge, err := c.encoder.Decode(challengeData, format, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to decode %s challenge: %w", format, err)
+	}
+
+	log.Printf("Decoded secure challenge: Algorithm=%s, Difficulty=%d, ExpiresAt=%d", 
+		secureChallenge.Algorithm, secureChallenge.Difficulty, secureChallenge.ExpiresAt)
+
+	// Solve the challenge
 	var solution string
 	start := time.Now()
 
-	if strings.Contains(challengeStr, "Argon2") {
-		// Parse Argon2 challenge
-		seed, difficulty, err := parseArgon2Challenge(challengeStr)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse Argon2 challenge: %w", err)
+	if secureChallenge.Algorithm == "sha256" {
+		// Solve SHA-256 challenge
+		challenge := &pow.Challenge{
+			Seed:       secureChallenge.Seed,
+			Difficulty: secureChallenge.Difficulty,
 		}
-
-		challenge, err := pow.GenerateArgon2Challenge(difficulty)
+		solution, err = pow.SolveChallenge(challenge)
 		if err != nil {
-			return "", fmt.Errorf("failed to create Argon2 challenge: %w", err)
+			return "", fmt.Errorf("failed to solve SHA-256 challenge: %w", err)
 		}
-		challenge.Seed = seed
-
+	} else if secureChallenge.Algorithm == "argon2" {
+		// Solve Argon2 challenge
+		challenge := &pow.Argon2Challenge{
+			Seed:       secureChallenge.Seed,
+			Difficulty: secureChallenge.Difficulty,
+		}
+		if secureChallenge.Argon2Params != nil {
+			challenge.Time = secureChallenge.Argon2Params.Time
+			challenge.Memory = secureChallenge.Argon2Params.Memory
+			challenge.Threads = secureChallenge.Argon2Params.Threads
+			challenge.KeyLen = secureChallenge.Argon2Params.KeyLength
+		}
 		solution, err = pow.SolveArgon2Challenge(challenge)
 		if err != nil {
 			return "", fmt.Errorf("failed to solve Argon2 challenge: %w", err)
 		}
 	} else {
-		// Parse SHA-256 challenge
-		seed, difficulty, err := parseChallenge(challengeStr)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse challenge: %w", err)
-		}
-
-		challenge := &pow.Challenge{
-			Seed:       seed,
-			Difficulty: difficulty,
-		}
-
-		solution, err = pow.SolveChallenge(challenge)
-		if err != nil {
-			return "", fmt.Errorf("failed to solve challenge: %w", err)
-		}
+		return "", fmt.Errorf("unsupported algorithm: %s", secureChallenge.Algorithm)
 	}
 	elapsed := time.Since(start)
 
@@ -132,36 +140,7 @@ func (c *Client) SetRetryConfig(maxRetries int, retryDelay time.Duration) {
 	c.retryDelay = retryDelay
 }
 
-func parseChallenge(challenge string) (seed string, difficulty int, err error) {
-	re := regexp.MustCompile(`Solve PoW: ([a-f0-9]+) with prefix (0+)`)
-	matches := re.FindStringSubmatch(challenge)
-
-	if len(matches) != 3 {
-		return "", 0, fmt.Errorf("invalid challenge format")
-	}
-
-	seed = matches[1]
-	difficulty = len(matches[2])
-
-	return seed, difficulty, nil
-}
-
-func parseArgon2Challenge(challenge string) (seed string, difficulty int, err error) {
-	re := regexp.MustCompile(`Solve Argon2 PoW: ([a-f0-9]+) with (\d+) leading zeros`)
-	matches := re.FindStringSubmatch(challenge)
-
-	if len(matches) != 3 {
-		return "", 0, fmt.Errorf("invalid Argon2 challenge format")
-	}
-
-	seed = matches[1]
-	_, err = fmt.Sscanf(matches[2], "%d", &difficulty)
-	if err != nil {
-		return "", 0, fmt.Errorf("failed to parse difficulty: %w", err)
-	}
-
-	return seed, difficulty, nil
-}
+// Legacy parsing functions removed - only JSON format supported
 
 func (c *Client) RequestMultipleQuotes(count int) []string {
 	quotes := make([]string, 0, count)

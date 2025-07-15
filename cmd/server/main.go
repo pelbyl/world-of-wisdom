@@ -23,6 +23,7 @@ func main() {
 		metricsPort = flag.String("metrics-port", normalizePort(getEnv("METRICS_PORT", "2112")), "Prometheus metrics port")
 		algorithm   = flag.String("algorithm", getEnv("ALGORITHM", "argon2"), "PoW algorithm: sha256 or argon2")
 		dbURL       = flag.String("db-url", "", "PostgreSQL connection URL (optional)")
+		format      = flag.String("format", getEnv("CHALLENGE_FORMAT", "binary"), "Challenge format: json or binary")
 	)
 	flag.Parse()
 
@@ -37,13 +38,14 @@ func main() {
 	}
 
 	cfg := server.Config{
-		Port:         *port,
-		Difficulty:   *difficulty,
-		Timeout:      *timeout,
-		AdaptiveMode: *adaptive,
-		MetricsPort:  *metricsPort,
-		Algorithm:    *algorithm,
-		DatabaseURL:  *dbURL,
+		Port:            *port,
+		Difficulty:      *difficulty,
+		Timeout:         *timeout,
+		AdaptiveMode:    *adaptive,
+		MetricsPort:     *metricsPort,
+		Algorithm:       *algorithm,
+		DatabaseURL:     *dbURL,
+		ChallengeFormat: *format,
 	}
 
 	srv, err := server.NewServer(cfg)

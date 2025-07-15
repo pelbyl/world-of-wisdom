@@ -27,7 +27,7 @@ make demo
 - **🛡️ Enhanced Security**: Argon2 memory-hard PoW puzzles with HMAC-signed challenges and time-based expiration
 - **🔐 Challenge Integrity**: HMAC-SHA256 signatures prevent challenge tampering and replay attacks
 - **⚡ Fast Validation**: Multi-stage validation pipeline with caching for optimal performance
-- **📦 Binary Protocol**: Compact binary format reduces bandwidth by 60-70% vs JSON
+- **📦 Binary Protocol**: Compact binary format reduces bandwidth by ~70% vs JSON
 - **💾 Data Persistence**: PostgreSQL TimescaleDB for metrics and application data (with sqlc-generated queries)
 - **📊 Real-time Monitoring**: Mantine UI dashboard with live client behavior tracking
 - **🚀 REST API**: Type-safe database operations with sqlc-generated queries
@@ -50,6 +50,7 @@ The `.env` file contains all configurable variables with sensible defaults:
 | `ALGORITHM` | argon2 | PoW algorithm (sha256/argon2) |
 | `DIFFICULTY` | 2 | Mining difficulty |
 | `ADAPTIVE_MODE` | true | Enable adaptive difficulty |
+| `CHALLENGE_FORMAT` | binary | Challenge format (binary/json) |
 
 **Note:** Environment variables are automatically loaded by docker-compose from the `.env` file.
 
@@ -264,6 +265,60 @@ interface MetricsData {
   activeConnections: number
 }
 ```
+
+## 🔀 Flow overview
+
+```shell
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   Client    │    │ TCP Server  │    │  Database   │
+│             │    │             │    │             │
+│ 1. Request  │───►│ 2. Generate │───►│ 3. Store    │
+│             │    │   Signed    │    │ Challenge   │
+│             │◄───│  Challenge  │    │  Metadata   │
+│             │    │             │    │             │
+│ 4. Solve +  │───►│ 5. Fast     │    │             │
+│   Submit    │    │ Validation  │    │             │
+│             │◄───│ 6. Wisdom   │◄───│ 7. Log      │
+└─────────────┘    └─────────────┘    └─────────────┘
+```
+
+## 📡 Protocol Format Configuration
+
+The system supports two challenge transmission formats:
+
+### Binary Format (Default)
+Compact 75-byte format for production use:
+```bash
+# Server configuration
+./server -format binary
+# or
+CHALLENGE_FORMAT=binary ./server
+
+# Benefits:
+# - 70% bandwidth reduction (75 bytes vs 256 bytes)
+# - Faster parsing and transmission
+# - Ideal for production environments
+```
+
+### JSON Format
+Human-readable format for debugging:
+```bash
+# Server configuration  
+./server -format json
+# or
+CHALLENGE_FORMAT=json ./server
+
+# Benefits:
+# - Human-readable for debugging
+# - Easy integration with web clients
+# - Useful for development and testing
+```
+
+### Client Auto-Detection
+Clients automatically detect the format:
+- Binary challenges start with version byte (0x01)
+- JSON challenges start with '{' character
+- No client configuration needed
 
 ## 🔧 Configuration
 
@@ -526,16 +581,16 @@ func (v *ValidationPipeline) Validate(solution *Solution) *ValidationResult {
 Compact binary format for efficient transmission:
 
 ```
-Binary Challenge Format (59+ bytes):
+Binary Challenge Format (75+ bytes):
 [Version:1][Algorithm:1][Difficulty:1][Timestamp:8][ExpiresAt:8]
 [Seed:16][Nonce:8][Signature:32][Argon2Params:10] (optional)
 ```
 
 **Efficiency Benefits:**
-- **60-70% Bandwidth Reduction**: Binary format vs JSON transmission
+- **~70% Bandwidth Reduction**: Binary format vs JSON transmission (75 bytes vs 256 bytes)
 - **Faster Parsing**: Direct memory mapping vs JSON parsing
-- **Versioning Support**: Protocol evolution without breaking changes
-- **Dual Format**: Maintains JSON compatibility for development
+- **Auto-Detection**: Client automatically detects format (JSON starts with '{', binary doesn't)
+- **Configurable Format**: Server can use either binary or JSON via CHALLENGE_FORMAT env var
 
 #### 4. **Security Features**
 
@@ -551,10 +606,11 @@ Binary Challenge Format (59+ bytes):
 - Rate limiting with configurable thresholds
 - Binary protocol for reduced bandwidth
 
-**Backward Compatibility:**
-- Supports both legacy and secure challenge formats
-- Graceful migration path for existing clients
-- Configuration-driven protocol selection
+**Protocol Formats:**
+- **Binary Format (default)**: Compact 75-byte format for production use
+- **JSON Format**: Human-readable format for debugging and development
+- **HMAC-signed challenges**: Both formats include integrity protection
+- **Auto-detection**: Clients automatically detect and handle both formats
 
 This enhanced security architecture provides robust protection against advanced attacks while maintaining the system's performance and usability characteristics.
 

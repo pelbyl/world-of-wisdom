@@ -81,7 +81,7 @@ High Priority Enhancements:
 Medium Priority Enhancements:
 1. Optimized client solver - Better performance
 2. Compact transmission - Binary format for efficiency
-3. Backward compatibility - Support legacy challenge format
+3. Protocol consistency - JSON format only
 
 Low Priority Enhancements:
 1. Multiple signature algorithms - Beyond HMAC-SHA256
@@ -296,7 +296,7 @@ Phase 4: Migration (Week 4)
 
 Deploy with backward compatibility
 Monitor adoption metrics
-Gradually phase out legacy format
+Use JSON format exclusively
 
 🔍 7. Security Considerations
 A few additional security enhancements to consider:
