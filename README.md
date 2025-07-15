@@ -200,14 +200,23 @@ type Argon2Challenge struct {
 **Available Endpoints:**
 
 ```openapi
-GET  /health               - Health check
-GET  /api/v1/stats         - System statistics
-GET  /api/v1/challenges    - Challenge list (with filters)
-GET  /api/v1/connections   - Active connections
-GET  /api/v1/metrics       - System metrics
-GET  /api/v1/recent-solves    - Recent blockchain blocks
-GET  /api/v1/logs             - Activity logs
-GET  /api/v1/client-behaviors - Per-client difficulty and behavior
+# Core API Endpoints
+GET  /health                            - Health check
+GET  /api/v1/stats                      - System statistics
+GET  /api/v1/challenges                 - Challenge list (with filters)
+GET  /api/v1/connections                - Active connections
+GET  /api/v1/metrics                    - System metrics
+GET  /api/v1/recent-solves              - Recent blockchain blocks
+GET  /api/v1/logs                       - Activity logs
+GET  /api/v1/client-behaviors           - Per-client difficulty and behavior
+
+# Experiment Analytics Endpoints
+GET  /api/v1/experiment/summary         - Experiment overview and client distribution
+GET  /api/v1/experiment/success-criteria - Success criteria evaluation
+GET  /api/v1/experiment/timeline        - Scenario timeline and phases
+GET  /api/v1/experiment/performance     - Performance metrics analysis
+GET  /api/v1/experiment/mitigation     - Attack detection and mitigation stats
+GET  /api/v1/experiment/comparison     - Multi-scenario comparison data
 ```
 
 **Database Integration:**
@@ -365,7 +374,9 @@ world-of-wisdom/
 │   │   │   ├── ChallengePanel.tsx
 │   │   │   ├── ConnectionsPanel.tsx
 │   │   │   ├── MetricsDashboard.tsx
-│   │   │   └── LogsPanel.tsx
+│   │   │   ├── LogsPanel.tsx
+│   │   │   ├── ExperimentAnalytics.tsx
+│   │   │   └── ExperimentComparison.tsx
 │   │   ├── hooks/                # Custom React hooks
 │   │   │   └── useAPI.ts         # API polling hook
 │   │   ├── types/                # TypeScript definitions
@@ -376,12 +387,14 @@ world-of-wisdom/
 ├── images/                       # Documentation assets
 ├── docker-compose.yml            # Main services
 ├── docker-compose.demo.yml       # Demo client setup
+├── docker-compose.scenario.yml   # Experiment scenario clients
 ├── Dockerfile.server             # TCP server image
 ├── Dockerfile.apiserver          # API server image
 ├── Dockerfile.client             # Client image
 ├── Dockerfile.web                # Frontend image
-├── Makefile                      # Build automation
+├── Makefile                      # Build automation & scenarios
 ├── .env.example                  # Environment template
+├── CLAUDE.md                     # Development documentation
 └── README.md                     # This file
 ```
 
@@ -408,8 +421,15 @@ world-of-wisdom/
 **Docker Infrastructure:**
 
 - `docker-compose.yml` - Main services (server, API, web, DB)
-- `docker-compose.demo.yml` - Demo client orchestration
+- `docker-compose.demo.yml` - Demo client orchestration  
+- `docker-compose.scenario.yml` - Experiment scenario configurations
 - Multiple Dockerfiles for each service
+
+**Documentation:**
+
+- `README.md` - Project overview and usage guide
+- `CLAUDE.md` - Development documentation and experiment details
+- `api/openapi.yaml` - API specification
 
 ## 🔄 Key Features & Improvements
 
@@ -428,7 +448,7 @@ world-of-wisdom/
 
 ### Overview
 
-The system now implements a sophisticated per-client difficulty adjustment mechanism that tracks individual IP addresses and adjusts PoW difficulty based on their behavior patterns.
+The system implements a sophisticated per-client difficulty adjustment mechanism that tracks individual IP addresses and adjusts PoW difficulty based on their behavior patterns. This allows the system to maintain accessibility for legitimate users while automatically defending against DDoS attacks.
 
 ### How It Works
 
@@ -550,52 +570,160 @@ The algorithm identifies several DDoS attack patterns:
    - **Resource Efficiency**: 60% less server CPU usage under attack
    - **User Experience**: 98% of legitimate users maintain difficulty 1-2
 
-### 🧪 Experiment Tools
+### 🧪 Experiment Design & Tools
 
-The system includes comprehensive tools for testing and validating the adaptive difficulty system:
+The system includes comprehensive experiment capabilities for testing and validating the adaptive difficulty system against various attack scenarios.
 
-#### 1. **Experiment Analytics UI**
-Access the experiment dashboard at http://localhost:3000 (Experiment Analytics tab):
-- **Scenario Selection**: Choose from 5 predefined attack scenarios
-- **Live Mode**: Real-time monitoring of ongoing experiments
-- **Success Criteria**: Visual indicators showing system performance
-- **Attack Mitigation**: Metrics on detection rate and effectiveness
+#### Experiment Architecture
 
-#### 2. **Scenario Commands**
-Run experiment scenarios directly from the Makefile:
+The experiment system consists of three main components:
+
+1. **Client Simulators** (`docker-compose.scenario.yml`): Pre-configured Docker containers that simulate different client behaviors
+2. **Scenario Orchestration** (Makefile commands): Automated deployment of client combinations to simulate real-world scenarios
+3. **Analytics Dashboard** (Web UI): Real-time monitoring and analysis of experiment results
+
+#### Client Personas
+
+Each client type is carefully designed to simulate specific behavior patterns:
+
+| Client Type | Behavior Profile | Configuration |
+|-------------|------------------|---------------|
+| **Normal User** | Legitimate user solving puzzles at human speed | • Solve delay: 1500-3000ms<br>• Connection delay: 30-60s<br>• Failure rate: 5-10%<br>• Reconnect rate: Low |
+| **Power User** | Tech-savvy user with optimized client | • Solve delay: 500-2000ms<br>• Connection delay: 10-30s<br>• Failure rate: 2-5%<br>• Reconnect rate: Low |
+| **Script Kiddie** | Basic automated attack with simple scripts | • Solve delay: 50-200ms<br>• Connection delay: 1-5s<br>• Failure rate: 30-50%<br>• Reconnect rate: High |
+| **Sophisticated Attacker** | Advanced bot with solver optimization | • Solve delay: 10-100ms<br>• Connection delay: 0.1-1s<br>• Failure rate: 5-15%<br>• Reconnect rate: Very high |
+| **Botnet Node** | Distributed attack node | • Solve delay: 100-500ms<br>• Connection delay: 5-30s<br>• Failure rate: 20-40%<br>• Reconnect rate: Moderate |
+
+#### Experiment Scenarios
+
+##### 1. **Morning Rush** (`make scenario-morning-rush`)
+**Purpose**: Test system behavior during legitimate traffic spikes
+
+**Phases**:
+- Phase 1 (0-5 min): Gradual ramp-up of 10 normal users (1 user every 30s)
+- Phase 2 (5-10 min): 5 power users join suddenly
+- Expected: System maintains low difficulty (1-2) for all users
+
+**Success Criteria**:
+- ✅ All legitimate users maintain difficulty ≤ 2
+- ✅ Average solve time stays between 10-30 seconds
+- ✅ No false positive aggressive client detection
+
+##### 2. **Script Kiddie Attack** (`make scenario-script-kiddie`)
+**Purpose**: Validate detection of basic automated attacks
+
+**Setup**:
+- Baseline: 5 normal users active for 2 minutes
+- Attack: 1 script kiddie joins after baseline established
+- Expected: Script kiddie difficulty increases to 4-5 within 2 minutes
+
+**Success Criteria**:
+- ✅ Attacker difficulty reaches ≥ 4 within 5 minutes
+- ✅ Normal users unaffected (difficulty stays at 1-2)
+- ✅ Attack connection rate reduced by >50%
+
+##### 3. **Sophisticated DDoS** (`make scenario-ddos`)
+**Purpose**: Test defense against coordinated attacks
+
+**Timeline**:
+- Minutes 0-3: 10 normal users + 2 power users establish baseline
+- Minute 3: 3 sophisticated attackers begin assault
+- Expected: Attackers reach max difficulty (6) while legitimate users protected
+
+**Success Criteria**:
+- ✅ All attackers reach difficulty 6
+- ✅ Legitimate user impact <10% (solve time increase)
+- ✅ System remains responsive
+
+##### 4. **Botnet Simulation** (`make scenario-botnet`)
+**Purpose**: Evaluate distributed attack mitigation
+
+**Execution**:
+- Baseline: 8 normal users for 2 minutes
+- Attack: 20 botnet nodes activate simultaneously
+- Expected: Botnet nodes progressively throttled
+
+**Success Criteria**:
+- ✅ 80%+ botnet nodes reach difficulty ≥ 4
+- ✅ Server CPU usage remains <70%
+- ✅ Memory usage stable
+
+##### 5. **Mixed Reality** (`make scenario-mixed`)
+**Purpose**: Simulate real-world mixed traffic patterns
+
+**Components**:
+- 7 normal users (continuous)
+- 2 power users (continuous)
+- Dynamic attacker injection via `make scenario-add-attackers`
+- Expected: System correctly identifies and handles each client type
+
+**Success Criteria**:
+- ✅ Accurate client classification (>95% accuracy)
+- ✅ Appropriate difficulty assignment per behavior
+- ✅ System stability under mixed load
+
+#### Running Experiments
+
+##### Setup
 ```bash
-make scenario-morning-rush     # Legitimate traffic spike
-make scenario-script-kiddie    # Basic automated attack  
-make scenario-ddos            # Sophisticated DDoS attack
-make scenario-botnet          # Distributed botnet simulation
-make scenario-mixed           # Mixed reality scenario
+# 1. Ensure main system is running
+docker-compose up -d
 
-# Control commands
-make scenario-status          # Check scenario status
-make scenario-logs           # View scenario logs
-make scenario-stop           # Stop all scenarios
+# 2. Open monitoring dashboard
+make monitor  # Opens http://localhost:3000
+
+# 3. Navigate to "Experiment Analytics" tab
+# 4. Select your scenario from dropdown
+# 5. Enable "Live Mode" for real-time updates
 ```
 
-#### 3. **Monitoring Dashboard**
-All monitoring is integrated into the web UI:
+##### Execute Scenario
 ```bash
-make monitor                  # Opens http://localhost:3000
+# Choose and run a scenario
+make scenario-morning-rush   # For legitimate traffic testing
+make scenario-script-kiddie  # For basic attack testing
+make scenario-ddos          # For sophisticated attack testing
+make scenario-botnet        # For distributed attack testing
+make scenario-mixed         # For mixed traffic patterns
 ```
 
-The dashboard includes:
-- Real-time client behaviors with per-IP difficulty
-- Color-coded status indicators (Green/Yellow/Red)
-- System performance metrics and charts
-- Attack detection alerts
-- Experiment analytics with success criteria
+##### Monitor Results
+The Experiment Analytics dashboard provides:
+- **Real-time Metrics**: Client count, difficulty distribution, success rates
+- **Success Criteria**: Visual pass/fail indicators for each criterion
+- **Timeline View**: Scenario progression with phase markers
+- **Client Analysis**: Breakdown by client type with behavioral metrics
+- **Performance Impact**: System resource usage and response times
 
-#### 4. **Docker Compose Scenarios**
-The `docker-compose.scenario.yml` file provides pre-configured client types:
-- **Normal Users**: 1-2 connections/min, 1-3s solve time
-- **Power Users**: 5-10 connections/min, 0.5-2s solve time
-- **Script Kiddies**: 20-50 connections/min, 50-200ms solve time
-- **Sophisticated Attackers**: 100+ connections/min, 10-100ms solve time
-- **Botnet Nodes**: 10-30 connections/min, 100-500ms solve time
+##### Stop Experiment
+```bash
+# Stop all scenario containers
+make scenario-stop
+
+# Check final status
+make scenario-status
+```
+
+#### Experiment Data Analysis
+
+The system automatically collects:
+- **Per-Client Metrics**: IP, difficulty changes, solve times, reputation
+- **System Metrics**: CPU, memory, connection counts, challenge rates
+- **Attack Effectiveness**: Detection time, mitigation success, false positives
+- **Performance Impact**: Response time degradation, resource consumption
+
+All data is stored in PostgreSQL and accessible via:
+- Web UI visualization (Experiment Analytics tab)
+- API endpoints for custom analysis
+- Database queries for detailed investigation
+
+#### Best Practices
+
+1. **Baseline First**: Always establish normal traffic baseline before attacks
+2. **Incremental Testing**: Start with simple scenarios before complex ones
+3. **Monitor Resources**: Watch server resources during experiments
+4. **Document Results**: Use screenshot feature to capture interesting patterns
+5. **Clean Between Tests**: Use `make scenario-stop` between experiments
 
 ### 🖼️ Frontend Demo
 

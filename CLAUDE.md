@@ -229,22 +229,6 @@ services:
       replicas: 3
 ```
 
-## Troubleshooting
-
-1. **Services not starting:**
-   ```bash
-   docker-compose logs -f server
-   docker-compose logs -f apiserver
-   ```
-
-2. **Monitor shows no data:**
-   - Ensure API server is running on port 8081
-   - Check: `curl http://localhost:8081/api/v1/client-behaviors`
-
-3. **Clients not connecting:**
-   - Verify server is running on port 8080
-   - Check client logs: `docker-compose logs -f normal-user`
-
 ## Best Practices
 
 1. **Always start fresh:**
