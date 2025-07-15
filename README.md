@@ -26,14 +26,18 @@ make demo
 
 - **🛡️ Enhanced Security**: Argon2 memory-hard PoW puzzles with HMAC-signed challenges and time-based expiration
 - **🔐 Challenge Integrity**: HMAC-SHA256 signatures prevent challenge tampering and replay attacks
-- **⚡ Fast Validation**: Multi-stage validation pipeline with caching for optimal performance
+- **⚡ Fast Validation**: Multi-stage validation pipeline with caching and rate limiting for optimal performance
 - **📦 Binary Protocol**: Compact binary format reduces bandwidth by ~70% vs JSON
 - **💾 Data Persistence**: PostgreSQL TimescaleDB for metrics and application data (with sqlc-generated queries)
-- **📊 Real-time Monitoring**: Mantine UI dashboard with live client behavior tracking
-- **🚀 REST API**: Type-safe database operations with sqlc-generated queries
+- **📊 Real-time Monitoring**: Mantine UI dashboard with live client behavior tracking. Real-time updates via API polling.
+- **🚀 REST API**: Type-safe database operations with comprehensive endpoints and OpenAPI documentation
 - **🔄 Auto-Recovery**: Robust error handling with automatic reconnection
 - **🐳 Docker Ready**: Simple docker-compose setup for local development
 - **🎯 Per-IP Difficulty**: Individual client difficulty based on behavior patterns
+- **🧠 Behavioral Analysis**: Tracks patterns to detect DDoS attempts
+- **🏆 Reputation System**: Good behavior reduces difficulty over time
+- **🎭 Demo System**: Multiple client types for testing and demonstration
+- **🌐 CORS Support**: Proper cross-origin request handling
 
 ## ⚙️ Environment Configuration
 
@@ -337,15 +341,6 @@ DIFFICULTY=2
 ADAPTIVE_MODE=true
 ```
 
-## 📈 Web Dashboard Features
-
-- **📊 System Stats**: Real-time performance metrics and difficulty tracking
-- **🔍 Challenge Monitor**: View active and completed challenges
-- **👥 Connection Tracking**: Monitor active client connections
-- **📋 Activity Logs**: System event logging with timestamps
-- **💾 Persistent Data**: All data stored in PostgreSQL database
-- **🔄 Auto-refresh**: Real-time updates via API polling
-
 ## 🧪 Testing & Demo
 
 ### Running the Demo
@@ -428,13 +423,6 @@ world-of-wisdom/
 ├── web/                          # React frontend
 │   ├── src/
 │   │   ├── components/           # UI components
-│   │   │   ├── StatsPanel.tsx
-│   │   │   ├── ChallengePanel.tsx
-│   │   │   ├── ConnectionsPanel.tsx
-│   │   │   ├── MetricsDashboard.tsx
-│   │   │   ├── LogsPanel.tsx
-│   │   │   ├── ExperimentAnalytics.tsx
-│   │   │   └── ExperimentComparison.tsx
 │   │   ├── hooks/                # Custom React hooks
 │   │   │   └── useAPI.ts         # API polling hook
 │   │   ├── types/                # TypeScript definitions
@@ -446,10 +434,7 @@ world-of-wisdom/
 ├── docker-compose.yml            # Main services
 ├── docker-compose.demo.yml       # Demo client setup
 ├── docker-compose.scenario.yml   # Experiment scenario clients
-├── Dockerfile.server             # TCP server image
-├── Dockerfile.apiserver          # API server image
-├── Dockerfile.client             # Client image
-├── Dockerfile.web                # Frontend image
+├── Dockerfile.{server,apiserver,client,web} # Dockerfiles for each service
 ├── Makefile                      # Build automation & scenarios
 ├── .env.example                  # Environment template
 ├── CLAUDE.md                     # Development documentation
@@ -488,22 +473,6 @@ world-of-wisdom/
 - `README.md` - Project overview and usage guide
 - `CLAUDE.md` - Development documentation and experiment details
 - `api/openapi.yaml` - API specification
-
-## 🔄 Key Features & Improvements
-
-- ✅ **Argon2 PoW**: Memory-hard proof-of-work for DDoS protection
-- ✅ **Enhanced Security**: HMAC-signed challenges with time-based expiration
-- ✅ **Fast Validation Pipeline**: Multi-stage validation with caching and rate limiting
-- ✅ **Binary Protocol Support**: Compact binary format for efficient transmission
-- ✅ **PostgreSQL Integration**: Full database persistence with type-safe queries
-- ✅ **REST API**: Comprehensive endpoints with OpenAPI documentation
-- ✅ **Real-time Dashboard**: Live metrics and system monitoring
-- ✅ **Demo System**: Multiple client types for testing and demonstration
-- ✅ **Docker Compose**: Complete containerized deployment
-- ✅ **CORS Support**: Proper cross-origin request handling
-- ✅ **Per-Client Adaptive Difficulty**: Individual difficulty based on behavior
-- ✅ **Behavioral Analysis**: Tracks patterns to detect DDoS attempts
-- ✅ **Reputation System**: Good behavior reduces difficulty over time
 
 ## 🔐 Enhanced Security Architecture
 
@@ -775,9 +744,9 @@ Each client type is carefully designed to simulate specific behavior patterns:
 - Expected: System maintains low difficulty (1-2) for all users
 
 **Success Criteria**:
-- ✅ All legitimate users maintain difficulty ≤ 2
-- ✅ Average solve time stays between 10-30 seconds
-- ✅ No false positive aggressive client detection
+- All legitimate users maintain difficulty ≤ 2
+- Average solve time stays between 10-30 seconds
+- No false positive aggressive client detection
 
 ##### 2. **Script Kiddie Attack** (`make scenario-script-kiddie`)
 **Purpose**: Validate detection of basic automated attacks
@@ -788,9 +757,9 @@ Each client type is carefully designed to simulate specific behavior patterns:
 - Expected: Script kiddie difficulty increases to 4-5 within 2 minutes
 
 **Success Criteria**:
-- ✅ Attacker difficulty reaches ≥ 4 within 5 minutes
-- ✅ Normal users unaffected (difficulty stays at 1-2)
-- ✅ Attack connection rate reduced by >50%
+- Attacker difficulty reaches ≥ 4 within 5 minutes
+- Normal users unaffected (difficulty stays at 1-2)
+- Attack connection rate reduced by >50%
 
 ##### 3. **Sophisticated DDoS** (`make scenario-ddos`)
 **Purpose**: Test defense against coordinated attacks
@@ -801,9 +770,9 @@ Each client type is carefully designed to simulate specific behavior patterns:
 - Expected: Attackers reach max difficulty (6) while legitimate users protected
 
 **Success Criteria**:
-- ✅ All attackers reach difficulty 6
-- ✅ Legitimate user impact <10% (solve time increase)
-- ✅ System remains responsive
+- All attackers reach difficulty 6
+- Legitimate user impact <10% (solve time increase)
+- System remains responsive
 
 ##### 4. **Botnet Simulation** (`make scenario-botnet`)
 **Purpose**: Evaluate distributed attack mitigation
@@ -814,9 +783,9 @@ Each client type is carefully designed to simulate specific behavior patterns:
 - Expected: Botnet nodes progressively throttled
 
 **Success Criteria**:
-- ✅ 80%+ botnet nodes reach difficulty ≥ 4
-- ✅ Server CPU usage remains <70%
-- ✅ Memory usage stable
+- 80%+ botnet nodes reach difficulty ≥ 4
+- Server CPU usage remains <70%
+- Memory usage stable
 
 ##### 5. **Mixed Reality** (`make scenario-mixed`)
 **Purpose**: Simulate real-world mixed traffic patterns
@@ -828,9 +797,9 @@ Each client type is carefully designed to simulate specific behavior patterns:
 - Expected: System correctly identifies and handles each client type
 
 **Success Criteria**:
-- ✅ Accurate client classification (>95% accuracy)
-- ✅ Appropriate difficulty assignment per behavior
-- ✅ System stability under mixed load
+- Accurate client classification (>95% accuracy)
+- Appropriate difficulty assignment per behavior
+- System stability under mixed load
 
 #### Running Experiments
 
@@ -897,7 +866,13 @@ All data is stored in PostgreSQL and accessible via:
 
 ### 🖼️ Frontend Demo
 
-![front-demo](images/front-demo.png)
+#### Dashboard
+
+![front-demo1](images/front-demo1.png)
+
+#### Experiment Analytics
+
+![front-demo2](images/front-demo2.png)
 
 ## 📜 License
 
