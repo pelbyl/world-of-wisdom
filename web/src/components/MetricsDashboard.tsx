@@ -1,6 +1,6 @@
-import { Paper, Title, Grid, Group, Badge, Text, Stack, RingProgress, ThemeIcon, Loader, Alert, Progress } from '@mantine/core'
-import { LineChart, AreaChart } from '@mantine/charts'
-import { IconShield, IconClock, IconNetwork, IconInfoCircle, IconRefresh } from '@tabler/icons-react'
+import { Paper, Title, Grid, Group, Badge, Text, Stack, RingProgress, ThemeIcon, Loader, Alert, Progress, ScrollArea, Table } from '@mantine/core'
+import { AreaChart, LineChart } from '@mantine/charts'
+import { IconShield, IconClock, IconNetwork, IconInfoCircle, IconRefresh, IconUser, IconAlertTriangle } from '@tabler/icons-react'
 import { useEffect, useState, useRef } from 'react'
 import { useStats } from '../hooks/useAPI'
 import { StatsData } from '../types/api'
@@ -17,14 +17,50 @@ interface MetricsData {
   activeConnections: number
 }
 
+interface ClientBehavior {
+  ip: string
+  difficulty: number
+  connectionCount: number
+  failureRate: number
+  avgSolveTime: number
+  reconnectRate: number
+  reputation: number
+  suspicious: number
+  lastConnection: string
+  isAggressive: boolean
+  successfulChallenges: number
+  failedChallenges: number
+  totalChallenges: number
+}
+
 export function MetricsDashboard() {
   const { data: statsResponse, loading, error } = useStats({ interval: 1000 }) // 1s polling for stats
+  const [clientsResponse, setClientsResponse] = useState<{ data: { clients: ClientBehavior[] } } | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<MetricsData[]>([])
   const difficultyChartRef = useRef<HTMLDivElement>(null)
   const solveTimeChartRef = useRef<HTMLDivElement>(null)
   const connectionChartRef = useRef<HTMLDivElement>(null)
 
   const stats: StatsData | null = statsResponse?.status === 'success' ? statsResponse.data ?? null : null;
+
+  // Fetch client behaviors
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const response = await fetch('http://localhost:8081/api/v1/client-behaviors');
+        if (response.ok) {
+          const data = await response.json();
+          setClientsResponse(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch client behaviors:', err);
+      }
+    };
+
+    fetchClients();
+    const interval = setInterval(fetchClients, 5000); // Poll every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (stats) {
@@ -326,29 +362,121 @@ export function MetricsDashboard() {
         </Grid.Col>
       </Grid>
 
-      {/* DDoS Protection Status */}
+      {/* Client Behaviors */}
       <Paper p="md" withBorder>
-        <Group justify="space-between">
-          <div>
-            <Title order={4}>DDoS Protection Status</Title>
-            <Text size="sm" c="dimmed">
-              Adaptive difficulty adjustments: {currentMetrics.difficultyAdjustments}
-            </Text>
-          </div>
-          <Badge
-            color={currentMetrics.connectionRate > 20 ? 'red' : currentMetrics.connectionRate > 10 ? 'orange' : 'green'}
-            variant="light"
-            size="lg"
-          >
-            {currentMetrics.connectionRate > 20 ? 'High Load Detected' :
-              currentMetrics.connectionRate > 10 ? 'Moderate Load' : 'Normal Operation'}
-          </Badge>
+        <Group justify="space-between" mb="md">
+          <Title order={4}>Active Clients - Per-IP Difficulty</Title>
+          <Group gap="xs">
+            <Badge color="green" variant="light" size="sm">
+              <IconUser size={12} style={{ marginRight: 4 }} />
+              Normal Clients
+            </Badge>
+            <Badge color="red" variant="light" size="sm">
+              <IconAlertTriangle size={12} style={{ marginRight: 4 }} />
+              Aggressive Clients
+            </Badge>
+          </Group>
         </Group>
-
-        {currentMetrics.connectionRate > 20 && (
-          <Text size="sm" c="red" mt="sm">
-            ⚠️ High connection rate detected - difficulty automatically increased to {currentMetrics.currentDifficulty}
+        
+        {clientsResponse?.data?.clients && clientsResponse.data.clients.length > 0 ? (
+          <ScrollArea h={400}>
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>IP Address</Table.Th>
+                  <Table.Th>Difficulty</Table.Th>
+                  <Table.Th>Connections</Table.Th>
+                  <Table.Th>Success / Failure</Table.Th>
+                  <Table.Th>Avg Solve Time</Table.Th>
+                  <Table.Th>Reputation</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {clientsResponse.data.clients.map((client: ClientBehavior) => {
+                  const timeSinceConnection = new Date(client.lastConnection);
+                  const minutesAgo = Math.floor((Date.now() - timeSinceConnection.getTime()) / 60000);
+                  
+                  return (
+                    <Table.Tr key={client.ip}>
+                      <Table.Td>
+                        <Group gap="xs">
+                          {client.isAggressive && <Text fw={700} c="red">!</Text>}
+                          <Text fw={500}>{client.ip}</Text>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge 
+                          color={client.difficulty >= 5 ? 'red' : client.difficulty >= 3 ? 'orange' : 'green'}
+                          variant="filled"
+                          size="sm"
+                        >
+                          {client.difficulty}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>{client.connectionCount}</Table.Td>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Badge color="green" variant="light" size="xs">
+                            {client.successfulChallenges}
+                          </Badge>
+                          <Text size="xs" c="dimmed">/</Text>
+                          <Badge color="red" variant="light" size="xs">
+                            {client.failedChallenges}
+                          </Badge>
+                          {client.totalChallenges > 0 && (
+                            <Text size="xs" c={client.failureRate > 0.5 ? 'red' : 'green'}>
+                              ({((client.successfulChallenges / client.totalChallenges) * 100).toFixed(1)}% success)
+                            </Text>
+                          )}
+                          {client.totalChallenges === 0 && (
+                            <Text size="xs" c="dimmed">
+                              (no attempts)
+                            </Text>
+                          )}
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>{formatSolveTime(client.avgSolveTime)}</Table.Td>
+                      <Table.Td>
+                        <Progress 
+                          value={client.reputation} 
+                          color={client.reputation < 30 ? 'red' : client.reputation < 60 ? 'orange' : 'green'}
+                          size="sm"
+                          w={60}
+                        />
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs" c="dimmed">
+                          {minutesAgo === 0 ? 'Just now' : `${minutesAgo}m ago`}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
+        ) : (
+          <Text c="dimmed" ta="center" py="xl">
+            No active clients detected
           </Text>
+        )}
+        
+        {clientsResponse?.data?.clients && (
+          <Group justify="space-between" mt="md">
+            <Text size="sm" c="dimmed">
+              Total clients: {clientsResponse.data.clients.length}
+            </Text>
+            <Group gap="xs">
+              <Text size="sm" c="dimmed">
+                High difficulty: {clientsResponse.data.clients.filter((c: ClientBehavior) => c.difficulty >= 5).length}
+              </Text>
+              <Text size="sm" c="dimmed">•</Text>
+              <Text size="sm" c="dimmed">
+                Aggressive: {clientsResponse.data.clients.filter((c: ClientBehavior) => c.isAggressive).length}
+              </Text>
+            </Group>
+          </Group>
         )}
       </Paper>
     </Stack>

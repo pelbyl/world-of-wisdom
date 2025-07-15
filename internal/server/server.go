@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"world-of-wisdom/internal/behavior"
 	generated "world-of-wisdom/internal/database/generated"
 	"world-of-wisdom/pkg/metrics"
 	"world-of-wisdom/pkg/pow"
@@ -43,6 +44,9 @@ type Server struct {
 
 	// PoW algorithm selection
 	algorithm string // "sha256" or "argon2"
+
+	// Client behavior tracking
+	behaviorTracker *behavior.Tracker
 }
 
 type Config struct {
@@ -97,22 +101,26 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	return &Server{
-		listener:       listener,
-		quoteProvider:  wisdom.NewQuoteProvider(),
-		difficulty:     cfg.Difficulty,
-		timeout:        cfg.Timeout,
-		shutdownChan:   make(chan struct{}),
-		dbpool:         dbpool,
-		queries:        generated.New(),
-		solveTimes:     make([]time.Duration, 0, 100),
-		lastAdjustment: time.Now(),
-		adaptiveMode:   cfg.AdaptiveMode,
-		algorithm:      algorithm,
+		listener:        listener,
+		quoteProvider:   wisdom.NewQuoteProvider(),
+		difficulty:      cfg.Difficulty,
+		timeout:         cfg.Timeout,
+		shutdownChan:    make(chan struct{}),
+		dbpool:          dbpool,
+		queries:         generated.New(),
+		solveTimes:      make([]time.Duration, 0, 100),
+		lastAdjustment:  time.Now(),
+		adaptiveMode:    cfg.AdaptiveMode,
+		algorithm:       algorithm,
+		behaviorTracker: behavior.NewTracker(dbpool),
 	}, nil
 }
 
 func (s *Server) Start() error {
 	log.Printf("Server listening on %s with difficulty %d", s.listener.Addr(), s.difficulty)
+
+	// Start periodic behavior stats logging
+	go s.logBehaviorStats()
 
 	for {
 		select {
@@ -150,7 +158,18 @@ func (s *Server) handleConnection(conn net.Conn) {
 	
 	// Track connection record for cleanup
 	var connectionRecord generated.Connection
+	// Track client behavior for this connection
+	var clientBehavior *behavior.ClientBehavior
 	defer func() {
+		// Record disconnection in behavior tracker
+		if clientBehavior != nil && clientBehavior.ConnectionTimestampID != (pgtype.UUID{}) {
+			err := s.behaviorTracker.RecordDisconnection(ctx, clientBehavior.ConnectionTimestampID, 
+				connectionRecord.ID != (pgtype.UUID{}))
+			if err != nil {
+				log.Printf("Failed to record disconnection: %v", err)
+			}
+		}
+		
 		// Always mark connection as disconnected when handler exits
 		if connectionRecord.ID != (pgtype.UUID{}) {
 			s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
@@ -176,6 +195,54 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
+	// Get previous behavior if exists
+	prevBehavior, _ := s.behaviorTracker.GetClientBehavior(ctx, remoteAddr)
+	prevDifficulty := prevBehavior.Difficulty
+	prevConnectionCount := prevBehavior.ConnectionCount
+	
+	// Track client behavior and get per-client difficulty
+	clientBehavior, err = s.behaviorTracker.RecordConnection(ctx, remoteAddr)
+	if err != nil {
+		log.Printf("Failed to track client behavior: %v", err)
+		// Fall back to global difficulty
+		clientBehavior = &behavior.ClientBehavior{
+			IP:         remoteAddr,
+			Difficulty: s.getDifficulty(),
+		}
+	}
+	
+	// Log connection with behavior context
+	if prevConnectionCount > 0 {
+		s.logActivity(ctx, "info", fmt.Sprintf("Client %s reconnected (connection #%d)", remoteAddr.String(), clientBehavior.ConnectionCount), map[string]interface{}{
+			"ip":                remoteAddr.String(),
+			"connection_count":  clientBehavior.ConnectionCount,
+			"failure_rate":      fmt.Sprintf("%.2f%%", clientBehavior.FailureRate*100),
+			"avg_solve_time_ms": clientBehavior.AvgSolveTime.Milliseconds(),
+			"reconnect_rate":    fmt.Sprintf("%.2f%%", clientBehavior.ReconnectRate*100),
+			"reputation_score":  clientBehavior.ReputationScore,
+			"event":             "client_reconnected",
+		})
+		
+		// Log difficulty change on reconnection
+		if prevDifficulty != clientBehavior.Difficulty {
+			s.logActivity(ctx, "warning", fmt.Sprintf("Client %s difficulty changed from %d to %d on reconnection", remoteAddr.String(), prevDifficulty, clientBehavior.Difficulty), map[string]interface{}{
+				"ip":             remoteAddr.String(),
+				"old_difficulty": prevDifficulty,
+				"new_difficulty": clientBehavior.Difficulty,
+				"reason":         "reconnection_pattern",
+				"event":          "difficulty_adjusted",
+			})
+		}
+	} else {
+		// First connection
+		s.logActivity(ctx, "info", fmt.Sprintf("New client %s connected with initial difficulty %d", remoteAddr.String(), clientBehavior.Difficulty), map[string]interface{}{
+			"ip":                 remoteAddr.String(),
+			"initial_difficulty": clientBehavior.Difficulty,
+			"reputation_score":   clientBehavior.ReputationScore,
+			"event":              "new_client_connected",
+		})
+	}
+
 	// Create connection record in database
 	connectionRecord, err = s.logConnection(ctx, clientID, remoteAddr, s.algorithm)
 	if err != nil {
@@ -190,7 +257,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Track connection rate for adaptive difficulty
 	s.trackConnection()
 
-	difficulty := s.getDifficulty()
+	// Use per-client difficulty
+	difficulty := clientBehavior.Difficulty
+	log.Printf("Client %s assigned difficulty %d (reputation: %.1f, suspicious: %.1f)", 
+		clientAddr, difficulty, clientBehavior.ReputationScore, clientBehavior.SuspiciousScore)
+	
+	// Log if client is flagged as aggressive
+	if difficulty >= 5 {
+		s.logActivity(ctx, "warning", fmt.Sprintf("High difficulty assigned to potential DDoS client: %s", remoteAddr.String()), map[string]interface{}{
+			"ip":                remoteAddr.String(),
+			"difficulty":        difficulty,
+			"reputation_score":  clientBehavior.ReputationScore,
+			"suspicious_score":  clientBehavior.SuspiciousScore,
+			"event":             "high_difficulty_assigned",
+		})
+	}
 
 	// Generate challenge based on algorithm
 	var challengeStr string
@@ -254,6 +335,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 			"reason":    "timeout_or_disconnect",
 		})
 		
+		// Record expired challenge as failed attempt for behavior tracking
+		solveTime := time.Since(solveStart)
+		err = s.behaviorTracker.RecordChallengeResult(ctx, remoteAddr, false, solveTime)
+		if err != nil {
+			log.Printf("Failed to record expired challenge result: %v", err)
+		}
+		
 		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
 		if challengeRecord.ID != (pgtype.UUID{}) {
 			s.updateChallengeStatus(ctx, challengeRecord.ID, generated.ChallengeStatusExpired)
@@ -267,6 +355,42 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if verifySolution(response) {
 		log.Printf("Client %s solved the %s challenge in %v", clientAddr, s.algorithm, solveTime)
 		s.recordSolveTime(solveTime)
+
+		// Get current reputation before update
+		oldBehavior, _ := s.behaviorTracker.GetClientBehavior(ctx, remoteAddr)
+		oldReputation := oldBehavior.ReputationScore
+		
+		// Update client behavior with successful challenge
+		err = s.behaviorTracker.RecordChallengeResult(ctx, remoteAddr, true, solveTime)
+		if err != nil {
+			log.Printf("Failed to record challenge result: %v", err)
+		}
+		
+		// Get new behavior to check changes
+		newBehavior, _ := s.behaviorTracker.GetClientBehavior(ctx, remoteAddr)
+		newReputation := newBehavior.ReputationScore
+		newDifficulty := newBehavior.Difficulty
+		
+		// Log reputation change
+		if oldReputation != newReputation {
+			s.logActivity(ctx, "info", fmt.Sprintf("Client %s reputation increased from %.1f to %.1f after successful challenge", remoteAddr.String(), oldReputation, newReputation), map[string]interface{}{
+				"ip":                remoteAddr.String(),
+				"old_reputation":    oldReputation,
+				"new_reputation":    newReputation,
+				"change":            newReputation - oldReputation,
+				"event":             "reputation_increased",
+			})
+		}
+		
+		// Log difficulty change if it occurred
+		if difficulty != newDifficulty {
+			s.logActivity(ctx, "info", fmt.Sprintf("Client %s difficulty changed from %d to %d after successful challenge", remoteAddr.String(), difficulty, newDifficulty), map[string]interface{}{
+				"ip":                remoteAddr.String(),
+				"old_difficulty":    difficulty,
+				"new_difficulty":    newDifficulty,
+				"event":             "difficulty_changed",
+			})
+		}
 
 		// Log successful solution
 		s.logActivity(ctx, "success", fmt.Sprintf("Challenge solved by %s", clientAddr), map[string]interface{}{
@@ -291,6 +415,42 @@ func (s *Server) handleConnection(conn net.Conn) {
 		conn.Write([]byte(quote + "\n"))
 	} else {
 		log.Printf("Client %s failed the %s challenge", clientAddr, s.algorithm)
+
+		// Get current reputation before update
+		oldBehavior, _ := s.behaviorTracker.GetClientBehavior(ctx, remoteAddr)
+		oldReputation := oldBehavior.ReputationScore
+		
+		// Update client behavior with failed challenge
+		err = s.behaviorTracker.RecordChallengeResult(ctx, remoteAddr, false, solveTime)
+		if err != nil {
+			log.Printf("Failed to record challenge result: %v", err)
+		}
+		
+		// Get new behavior to check changes
+		newBehavior, _ := s.behaviorTracker.GetClientBehavior(ctx, remoteAddr)
+		newReputation := newBehavior.ReputationScore
+		newDifficulty := newBehavior.Difficulty
+		
+		// Log reputation decrease
+		if oldReputation != newReputation {
+			s.logActivity(ctx, "warning", fmt.Sprintf("Client %s reputation decreased from %.1f to %.1f after failed challenge", remoteAddr.String(), oldReputation, newReputation), map[string]interface{}{
+				"ip":                remoteAddr.String(),
+				"old_reputation":    oldReputation,
+				"new_reputation":    newReputation,
+				"change":            newReputation - oldReputation,
+				"event":             "reputation_decreased",
+			})
+		}
+		
+		// Log difficulty change if it occurred
+		if difficulty != newDifficulty {
+			s.logActivity(ctx, "warning", fmt.Sprintf("Client %s difficulty increased from %d to %d after failed challenge", remoteAddr.String(), difficulty, newDifficulty), map[string]interface{}{
+				"ip":                remoteAddr.String(),
+				"old_difficulty":    difficulty,
+				"new_difficulty":    newDifficulty,
+				"event":             "difficulty_increased",
+			})
+		}
 
 		// Log failed challenge
 		s.logActivity(ctx, "warning", fmt.Sprintf("Challenge failed by %s", clientAddr), map[string]interface{}{
@@ -474,6 +634,45 @@ func (s *Server) GetStats() map[string]interface{} {
 
 func (s *Server) Addr() string {
 	return s.listener.Addr().String()
+}
+
+func (s *Server) logBehaviorStats() {
+	ticker := time.NewTicker(60 * time.Second) // Log every 60 seconds
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.shutdownChan:
+			return
+		case <-ticker.C:
+			ctx := context.Background()
+			
+			// Get aggressive clients
+			aggressiveClients, err := s.behaviorTracker.GetAggressiveClients(ctx, 10)
+			if err != nil {
+				log.Printf("Failed to get aggressive clients: %v", err)
+				continue
+			}
+			
+			// Log details of aggressive clients only if they exist
+			if len(aggressiveClients) > 0 {
+				for _, client := range aggressiveClients {
+					s.logActivity(ctx, "warning", fmt.Sprintf("Aggressive client detected: %s (difficulty: %d, reputation: %.1f)", 
+						client.IpAddress.String(), client.Difficulty.Int32, client.ReputationScore.Float64), map[string]interface{}{
+						"ip":                client.IpAddress.String(),
+						"difficulty":        client.Difficulty.Int32,
+						"failure_rate":      fmt.Sprintf("%.2f%%", client.FailureRate.Float64*100),
+						"reconnect_rate":    fmt.Sprintf("%.2f%%", client.ReconnectRate.Float64*100),
+						"reputation_score":  client.ReputationScore.Float64,
+						"suspicious_score":  client.SuspiciousActivityScore.Float64,
+						"connection_count":  client.ConnectionCount.Int32,
+						"avg_solve_time_ms": client.AvgSolveTimeMs.Int64,
+						"event":             "aggressive_client_alert",
+					})
+				}
+			}
+		}
+	}
 }
 
 // Database helper functions for write-only operations

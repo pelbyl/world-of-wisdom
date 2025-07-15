@@ -159,6 +159,26 @@ type Challenge struct {
 	Argon2Keylen  pgtype.Int4        `json:"argon2_keylen"`
 }
 
+type ClientBehavior struct {
+	ID                      pgtype.UUID        `json:"id"`
+	IpAddress               netip.Addr         `json:"ip_address"`
+	ConnectionCount         pgtype.Int4        `json:"connection_count"`
+	FailureRate             pgtype.Float8      `json:"failure_rate"`
+	AvgSolveTimeMs          pgtype.Int8        `json:"avg_solve_time_ms"`
+	LastConnection          pgtype.Timestamptz `json:"last_connection"`
+	ReconnectRate           pgtype.Float8      `json:"reconnect_rate"`
+	Difficulty              pgtype.Int4        `json:"difficulty"`
+	TotalChallenges         pgtype.Int4        `json:"total_challenges"`
+	SuccessfulChallenges    pgtype.Int4        `json:"successful_challenges"`
+	FailedChallenges        pgtype.Int4        `json:"failed_challenges"`
+	TotalSolveTimeMs        pgtype.Int8        `json:"total_solve_time_ms"`
+	SuspiciousActivityScore pgtype.Float8      `json:"suspicious_activity_score"`
+	ReputationScore         pgtype.Float8      `json:"reputation_score"`
+	LastReputationUpdate    pgtype.Timestamptz `json:"last_reputation_update"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Connection struct {
 	ID                  pgtype.UUID        `json:"id"`
 	ClientID            string             `json:"client_id"`
@@ -170,6 +190,14 @@ type Connection struct {
 	ChallengesAttempted pgtype.Int4        `json:"challenges_attempted"`
 	ChallengesCompleted pgtype.Int4        `json:"challenges_completed"`
 	TotalSolveTimeMs    pgtype.Int8        `json:"total_solve_time_ms"`
+}
+
+type ConnectionTimestamp struct {
+	ID                 pgtype.UUID        `json:"id"`
+	ClientBehaviorID   pgtype.UUID        `json:"client_behavior_id"`
+	ConnectedAt        pgtype.Timestamptz `json:"connected_at"`
+	DisconnectedAt     pgtype.Timestamptz `json:"disconnected_at"`
+	ChallengeCompleted pgtype.Bool        `json:"challenge_completed"`
 }
 
 type Log struct {

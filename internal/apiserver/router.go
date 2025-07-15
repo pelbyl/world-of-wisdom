@@ -31,6 +31,7 @@ func (s *Server) SetupRoutes() *echo.Echo {
 	e.GET("/api/v1/metrics", s.GetMetrics)
 	e.GET("/api/v1/recent-solves", s.GetRecentSolves)
 	e.GET("/api/v1/logs", s.GetLogs)
+	e.GET("/api/v1/client-behaviors", s.GetClientBehaviors)
 	
 	return e
 }

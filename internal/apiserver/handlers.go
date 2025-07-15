@@ -8,21 +8,24 @@ import (
 	"github.com/labstack/echo/v4"
 	"world-of-wisdom/internal/database/repository"
 	"world-of-wisdom/internal/blockchain"
+	"world-of-wisdom/internal/behavior"
 	"github.com/jackc/pgx/v5/pgxpool"
 	generated "world-of-wisdom/internal/database/generated"
 )
 
 type Server struct {
-	db         *pgxpool.Pool
-	repo       repository.Repository
-	blockchain *blockchain.Blockchain
+	db              *pgxpool.Pool
+	repo            repository.Repository
+	blockchain      *blockchain.Blockchain
+	behaviorTracker *behavior.Tracker
 }
 
 func NewServer(database *pgxpool.Pool, bc *blockchain.Blockchain) *Server {
 	return &Server{
-		db:         database,
-		repo:       repository.New(database),
-		blockchain: bc,
+		db:              database,
+		repo:            repository.New(database),
+		blockchain:      bc,
+		behaviorTracker: behavior.NewTracker(database),
 	}
 }
 
@@ -447,6 +450,115 @@ func (s *Server) GetLogs(c echo.Context) error {
 	response := LogsResponse{
 		Data:   &logMessages,
 		Status: LogsResponseStatusSuccess,
+	}
+	
+	return c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) GetClientBehaviors(c echo.Context) error {
+	ctx := c.Request().Context()
+	
+	// Parse limit parameter
+	limitStr := c.QueryParam("limit")
+	limit := 100 // default
+	if limitStr != "" {
+		if parsed, err := strconv.ParseInt(limitStr, 10, 32); err == nil {
+			limit = int(parsed)
+		}
+	}
+	
+	// Get active clients
+	activeClients, err := s.behaviorTracker.GetActiveClients(ctx, limit)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get active clients")
+	}
+	
+	// Get aggressive clients
+	aggressiveClients, err := s.behaviorTracker.GetAggressiveClients(ctx, 20)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get aggressive clients")
+	}
+	
+	// Convert to response format
+	type ClientBehaviorInfo struct {
+		IP                    string  `json:"ip"`
+		Difficulty            int     `json:"difficulty"`
+		ConnectionCount       int     `json:"connectionCount"`
+		FailureRate           float64 `json:"failureRate"`
+		AvgSolveTime          int64   `json:"avgSolveTime"`
+		ReconnectRate         float64 `json:"reconnectRate"`
+		Reputation            float64 `json:"reputation"`
+		Suspicious            float64 `json:"suspicious"`
+		LastConnection        string  `json:"lastConnection"`
+		IsAggressive          bool    `json:"isAggressive"`
+		SuccessfulChallenges  int     `json:"successfulChallenges"`
+		FailedChallenges      int     `json:"failedChallenges"`
+		TotalChallenges       int     `json:"totalChallenges"`
+	}
+	
+	clients := make([]ClientBehaviorInfo, len(activeClients))
+	aggressiveIPs := make(map[string]bool)
+	
+	// Mark aggressive IPs
+	for _, aggressive := range aggressiveClients {
+		aggressiveIPs[aggressive.IpAddress.String()] = true
+	}
+	
+	// Convert active clients
+	for i, client := range activeClients {
+		ipStr := client.IpAddress.String()
+		clients[i] = ClientBehaviorInfo{
+			IP:                   ipStr,
+			Difficulty:           int(client.Difficulty.Int32),
+			ConnectionCount:      int(client.ConnectionCount.Int32),
+			FailureRate:          client.FailureRate.Float64,
+			AvgSolveTime:         client.AvgSolveTimeMs.Int64,
+			ReconnectRate:        client.ReconnectRate.Float64,
+			Reputation:           client.ReputationScore.Float64,
+			Suspicious:           client.SuspiciousActivityScore.Float64,
+			LastConnection:       client.LastConnection.Time.Format(time.RFC3339),
+			IsAggressive:         aggressiveIPs[ipStr],
+			SuccessfulChallenges: int(client.SuccessfulChallenges.Int32),
+			FailedChallenges:     int(client.FailedChallenges.Int32),
+			TotalChallenges:      int(client.TotalChallenges.Int32),
+		}
+	}
+	
+	// Add aggressive clients that are not in active list
+	for _, aggressive := range aggressiveClients {
+		ipStr := aggressive.IpAddress.String()
+		found := false
+		for _, active := range clients {
+			if active.IP == ipStr {
+				found = true
+				break
+			}
+		}
+		if !found {
+			clients = append(clients, ClientBehaviorInfo{
+				IP:                   ipStr,
+				Difficulty:           int(aggressive.Difficulty.Int32),
+				ConnectionCount:      int(aggressive.ConnectionCount.Int32),
+				FailureRate:          aggressive.FailureRate.Float64,
+				AvgSolveTime:         aggressive.AvgSolveTimeMs.Int64,
+				ReconnectRate:        aggressive.ReconnectRate.Float64,
+				Reputation:           aggressive.ReputationScore.Float64,
+				Suspicious:           aggressive.SuspiciousActivityScore.Float64,
+				LastConnection:       aggressive.LastConnection.Time.Format(time.RFC3339),
+				IsAggressive:         true,
+				SuccessfulChallenges: int(aggressive.SuccessfulChallenges.Int32),
+				FailedChallenges:     int(aggressive.FailedChallenges.Int32),
+				TotalChallenges:      int(aggressive.TotalChallenges.Int32),
+			})
+		}
+	}
+	
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"clients": clients,
+			"total":   len(clients),
+		},
+		"status": "success",
 	}
 	
 	return c.JSON(http.StatusOK, response)

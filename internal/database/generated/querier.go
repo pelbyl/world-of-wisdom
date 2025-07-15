@@ -6,18 +6,23 @@ package db
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	CalculateAndUpdateClientDifficulty(ctx context.Context, db DBTX, ipAddress netip.Addr) (pgtype.Int4, error)
 	CountDifficultyAdjustments(ctx context.Context, db DBTX) (int64, error)
 	CountLogsByLevel(ctx context.Context, db DBTX) ([]CountLogsByLevelRow, error)
 	CreateChallenge(ctx context.Context, db DBTX, arg CreateChallengeParams) (Challenge, error)
+	CreateClientBehavior(ctx context.Context, db DBTX, ipAddress netip.Addr) (ClientBehavior, error)
 	CreateConnection(ctx context.Context, db DBTX, arg CreateConnectionParams) (Connection, error)
+	CreateConnectionTimestamp(ctx context.Context, db DBTX, ipAddress netip.Addr) (ConnectionTimestamp, error)
 	CreateLog(ctx context.Context, db DBTX, arg CreateLogParams) (Log, error)
 	CreateSolution(ctx context.Context, db DBTX, arg CreateSolutionParams) (Solution, error)
 	DeleteOldLogs(ctx context.Context, db DBTX) error
+	GetActiveClients(ctx context.Context, db DBTX, limit int32) ([]GetActiveClientsRow, error)
 	GetActiveConnections(ctx context.Context, db DBTX) ([]Connection, error)
 	// Get aggregated metrics with configurable time bucket
 	GetAggregatedMetrics(ctx context.Context, db DBTX, arg GetAggregatedMetricsParams) ([]GetAggregatedMetricsRow, error)
@@ -33,6 +38,8 @@ type Querier interface {
 	GetChallengesByDifficulty(ctx context.Context, db DBTX, difficulty int32) ([]Challenge, error)
 	// Get challenges with multiple filter options for API endpoint
 	GetChallengesFiltered(ctx context.Context, db DBTX, arg GetChallengesFilteredParams) ([]GetChallengesFilteredRow, error)
+	GetClientBehaviorByIP(ctx context.Context, db DBTX, ipAddress netip.Addr) (ClientBehavior, error)
+	GetClientBehaviorStats(ctx context.Context, db DBTX, limit int32) ([]GetClientBehaviorStatsRow, error)
 	// Get statistics per client ID
 	GetClientStats(ctx context.Context, db DBTX) ([]GetClientStatsRow, error)
 	GetConnection(ctx context.Context, db DBTX, id pgtype.UUID) (Connection, error)
@@ -60,10 +67,18 @@ type Querier interface {
 	GetSolutionStats(ctx context.Context, db DBTX) (GetSolutionStatsRow, error)
 	GetSolutionsByChallenge(ctx context.Context, db DBTX, challengeID pgtype.UUID) ([]Solution, error)
 	GetSystemMetrics(ctx context.Context, db DBTX) ([]GetSystemMetricsRow, error)
+	GetTopAggressiveClients(ctx context.Context, db DBTX, limit int32) ([]GetTopAggressiveClientsRow, error)
 	RecordMetric(ctx context.Context, db DBTX, arg RecordMetricParams) error
 	UpdateChallengeStatus(ctx context.Context, db DBTX, arg UpdateChallengeStatusParams) (Challenge, error)
+	UpdateClientBehavior(ctx context.Context, db DBTX, ipAddress netip.Addr) (ClientBehavior, error)
+	UpdateClientChallengeStats(ctx context.Context, db DBTX, arg UpdateClientChallengeStatsParams) error
+	UpdateClientDifficulty(ctx context.Context, db DBTX, arg UpdateClientDifficultyParams) error
+	UpdateClientReconnectRate(ctx context.Context, db DBTX, ipAddress netip.Addr) error
+	UpdateClientReputation(ctx context.Context, db DBTX, arg UpdateClientReputationParams) error
 	UpdateConnectionStats(ctx context.Context, db DBTX, arg UpdateConnectionStatsParams) (Connection, error)
 	UpdateConnectionStatus(ctx context.Context, db DBTX, arg UpdateConnectionStatusParams) (Connection, error)
+	UpdateConnectionTimestamp(ctx context.Context, db DBTX, arg UpdateConnectionTimestampParams) error
+	UpdateSuspiciousActivityScore(ctx context.Context, db DBTX, ipAddress netip.Addr) error
 	VerifySolution(ctx context.Context, db DBTX, arg VerifySolutionParams) (Solution, error)
 }
 
