@@ -10,12 +10,12 @@ export function ChallengePanel() {
   const recentChallenges = challenges.slice(-10).reverse()
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" style={{ height: '100%' }}>
       <Text size="sm" c="dimmed">
         Recent challenges from connected TCP clients
       </Text>
 
-      <ScrollArea h={300}>
+      <ScrollArea style={{ flex: 1 }}>
         <Stack gap="xs">
           {recentChallenges.length === 0 ? (
             <Text c="dimmed" ta="center">No recent challenges</Text>

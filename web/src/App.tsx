@@ -1,9 +1,11 @@
-import { MantineProvider, Container, Title, Grid, Paper, Stack, Text } from '@mantine/core'
+import { MantineProvider, Container, Title, Grid, Paper, Stack, Text, Tabs } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { MetricsDashboard } from './components/MetricsDashboard'
-import { LogsPanel } from './components/LogsPanel'
+import { CategorizedLogs } from './components/CategorizedLogs'
+import { LiveLogs } from './components/LiveLogs'
 import { ChallengePanel } from './components/ChallengePanel'
 import { ConnectionsPanel } from './components/ConnectionsPanel'
+import { ExperimentAnalytics } from './components/ExperimentAnalytics'
 import { useLogs } from './hooks/useAPI'
 
 function App() {
@@ -22,32 +24,58 @@ function App() {
             </Text>
           </Stack>
 
-          <Grid>
-            <Grid.Col span={12}>
-              <MetricsDashboard />
-            </Grid.Col>
+          <Tabs defaultValue="dashboard">
+            <Tabs.List>
+              <Tabs.Tab value="dashboard">📊 Dashboard</Tabs.Tab>
+              <Tabs.Tab value="experiments">🧪 Experiments</Tabs.Tab>
+            </Tabs.List>
 
-            <Grid.Col span={6}>
-              <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">Recent Challenges</Title>
-                <ChallengePanel />
-              </Paper>
-            </Grid.Col>
+            <Tabs.Panel value="dashboard" pt="lg">
+              <Grid>
+                <Grid.Col span={12}>
+                  <MetricsDashboard />
+                </Grid.Col>
 
-            <Grid.Col span={6}>
-              <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">Active Connections</Title>
-                <ConnectionsPanel />
-              </Paper>
-            </Grid.Col>
+                <Grid.Col span={12}>
+                  <Grid>
+                    <Grid.Col span={4}>
+                      <Paper shadow="xs" p="md" withBorder style={{ height: '800px', display: 'flex', flexDirection: 'column' }}>
+                        <Title order={3} mb="md">Recent Challenges</Title>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                          <ChallengePanel />
+                        </div>
+                      </Paper>
+                    </Grid.Col>
 
-            <Grid.Col span={12}>
-              <Paper shadow="xs" p="md" withBorder>
-                <Title order={3} mb="md">System Logs</Title>
-                <LogsPanel logs={logs} />
-              </Paper>
-            </Grid.Col>
-          </Grid>
+                    <Grid.Col span={4}>
+                      <Paper shadow="xs" p="md" withBorder style={{ height: '800px' }}>
+                        <Title order={3} mb="md">Active Connections</Title>
+                        <ConnectionsPanel />
+                      </Paper>
+                    </Grid.Col>
+
+                    <Grid.Col span={4}>
+                      <div style={{ height: '800px' }}>
+                        <LiveLogs />
+                      </div>
+                    </Grid.Col>
+                  </Grid>
+                </Grid.Col>
+
+                <Grid.Col span={12}>
+                  <Paper shadow="xs" p="md" withBorder>
+                    <Title order={3} mb="md">System Logs</Title>
+                    <CategorizedLogs logs={logs} />
+                  </Paper>
+                </Grid.Col>
+              </Grid>
+            </Tabs.Panel>
+
+            <Tabs.Panel value="experiments" pt="lg">
+              <ExperimentAnalytics />
+            </Tabs.Panel>
+
+          </Tabs>
         </Stack>
       </Container>
     </MantineProvider>

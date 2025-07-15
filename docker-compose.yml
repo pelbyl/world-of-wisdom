@@ -1,3 +1,7 @@
+# World of Wisdom - Main Compose File
+# This file manages all services required for the World of Wisdom application
+# It includes the PostgreSQL database, TCP server, API server, and web interface
+# Prerequisites: Docker and Docker Compose installed
 
 services:
   postgres:
@@ -43,6 +47,7 @@ services:
       ALGORITHM: ${ALGORITHM:-argon2}
       DIFFICULTY: ${DIFFICULTY:-2}
       ADAPTIVE_MODE: ${ADAPTIVE_MODE:-true}
+      CHALLENGE_FORMAT: ${CHALLENGE_FORMAT:-binary}
     networks:
       - wisdom-network
     restart: unless-stopped

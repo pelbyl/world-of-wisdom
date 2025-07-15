@@ -1,7 +1,9 @@
-version: '3.8'
+# DDoS Client Cluster - connects to existing TCP server and API server
+# This compose file only manages client containers for demonstration scenarios
+# Prerequisites: TCP server should be running on localhost:8080 or accessible host
 
 services:
-  # Aggressive clients that create DDoS-like scenario
+  # Aggressive clients that create DDoS-like scenario (5 instances)
   ddos-client-1:
     build:
       context: .

@@ -7,7 +7,8 @@ interface Props {}
 export function ConnectionsPanel({}: Props) {
   const { data: connectionsResponse, loading, error } = useConnections()
   
-  const connections = connectionsResponse?.status === 'success' && connectionsResponse.data ? connectionsResponse.data.connections : []
+  // Extract connections from the response
+  const connections = connectionsResponse?.data?.connections || []
   
   if (loading) {
     return <Text c="dimmed" size="sm">Loading connections...</Text>
@@ -34,9 +35,14 @@ export function ConnectionsPanel({}: Props) {
               >
                 <div />
               </Indicator>
-              <Text size="xs" style={{ fontFamily: 'monospace' }} truncate>
-                {connection.id.substring(0, 8)}
-              </Text>
+              <Stack gap={0}>
+                <Text size="xs" style={{ fontFamily: 'monospace' }} truncate>
+                  {connection.clientId.substring(0, 8)}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {connection.remoteAddr}
+                </Text>
+              </Stack>
             </Group>
             
             <Group gap="xs">
@@ -48,7 +54,7 @@ export function ConnectionsPanel({}: Props) {
                 {connection.status}
               </Badge>
               <Text size="xs" c="dimmed">
-                {connection.challengesCompleted}
+                {connection.challengesCompleted} solved
               </Text>
             </Group>
           </Group>

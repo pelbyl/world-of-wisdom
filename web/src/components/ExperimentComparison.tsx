@@ -15,6 +15,7 @@ import {
   Progress,
   Tooltip,
   ActionIcon,
+  Alert,
 } from '@mantine/core';
 import {
   LineChart,
@@ -66,8 +67,6 @@ export const ExperimentComparison: React.FC = () => {
     try {
       // In a real implementation, this would load historical data for each scenario
       // For now, we'll simulate with current data
-      const response = await fetch('/api/v1/client-behaviors');
-      const behaviors = await response.json();
 
       // Simulate different results for each scenario
       const mockResults: Record<string, ScenarioResult> = {

@@ -20,10 +20,8 @@ import {
   Indicator,
 } from '@mantine/core';
 import {
-  AreaChart,
   BarChart,
   DonutChart,
-  LineChart,
 } from '@mantine/charts';
 import {
   IconCheck,
@@ -39,7 +37,6 @@ import {
   IconBrain,
   IconMoodSmile,
   IconMoodSad,
-  IconDownload,
   IconPlayerPlay,
   IconPlayerPause,
   IconTrendingDown,
@@ -71,75 +68,51 @@ export const ExperimentAnalytics: React.FC = () => {
     <Stack gap="lg">
       <Group justify="space-between">
         <Title order={2}>Experiment Analytics</Title>
-        <Group>
-          <Button
-            leftSection={isLive ? <IconPlayerPause size={16} /> : <IconPlayerPlay size={16} />}
-            onClick={() => setIsLive(!isLive)}
-            color={isLive ? 'red' : 'green'}
-          >
-            {isLive ? 'Stop Live Analysis' : 'Start Live Analysis'}
-          </Button>
-          <Button variant="subtle" leftSection={<IconDownload size={16} />}>
-            Export Results
-          </Button>
-        </Group>
+        <Button
+          leftSection={isLive ? <IconPlayerPause size={16} /> : <IconPlayerPlay size={16} />}
+          onClick={() => setIsLive(!isLive)}
+          color={isLive ? 'red' : 'green'}
+        >
+          {isLive ? 'Stop Live Analysis' : 'Start Live Analysis'}
+        </Button>
       </Group>
 
-      <Tabs value={activeScenario} onChange={setActiveScenario}>
-        <Tabs.List>
-          <Tabs.Tab value="morning-rush" leftSection={<IconUsers size={14} />}>
-            Morning Rush
-          </Tabs.Tab>
-          <Tabs.Tab value="script-kiddie" leftSection={<IconBug size={14} />}>
-            Script Kiddie
-          </Tabs.Tab>
-          <Tabs.Tab value="ddos" leftSection={<IconRocket size={14} />}>
-            DDoS Attack
-          </Tabs.Tab>
-          <Tabs.Tab value="botnet" leftSection={<IconWorld size={14} />}>
-            Botnet
-          </Tabs.Tab>
-          <Tabs.Tab value="mixed" leftSection={<IconBrain size={14} />}>
-            Mixed Reality
-          </Tabs.Tab>
-        </Tabs.List>
-
-        <Tabs.Panel value={activeScenario} pt="lg">
-          <Grid>
-            <Grid.Col span={{ base: 12, lg: 8 }}>
-              <ExperimentSummary scenario={activeScenario} isLive={isLive} />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, lg: 4 }}>
-              <SuccessCriteria scenario={activeScenario} />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12 }}>
-              <ScenarioTimeline scenario={activeScenario} />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, md: 6 }}>
-              <ClientDistributionAnalysis />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, md: 6 }}>
-              <PerformanceMetrics />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12 }}>
-              <AttackMitigationAnalysis />
-            </Grid.Col>
-          </Grid>
-        </Tabs.Panel>
-      </Tabs>
+      <Grid>
+        <Grid.Col span={{ base: 12, lg: 6 }}>
+          <ExperimentSummary isLive={isLive} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, lg: 6 }}>
+          <SuccessCriteria scenario={activeScenario} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, lg: 8 }}>
+          <TabbedScenarioTimeline activeScenario={activeScenario} setActiveScenario={setActiveScenario} />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, lg: 4 }}>
+          <ClientDistributionAnalysis />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <FailureRateMetrics />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 6 }}>
+          <SolveTimeMetrics />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12 }}>
+          <AttackMitigationAnalysis />
+        </Grid.Col>
+      </Grid>
     </Stack>
   );
 };
 
 // Experiment Summary Component
-const ExperimentSummary: React.FC<{ scenario: string; isLive: boolean }> = ({ scenario, isLive }) => {
+const ExperimentSummary: React.FC<{ isLive: boolean }> = ({ isLive }) => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/v1/experiment/summary?scenario=${scenario}`);
+        const response = await fetch(`${API_BASE}/api/v1/experiment/summary`);
         const result = await response.json();
         setData(result);
         setLoading(false);
@@ -152,23 +125,23 @@ const ExperimentSummary: React.FC<{ scenario: string; isLive: boolean }> = ({ sc
     fetchData();
     const interval = isLive ? setInterval(fetchData, 2000) : null;
     return () => { if (interval) clearInterval(interval); };
-  }, [scenario, isLive]);
+  }, [isLive]);
 
-  if (loading) return <Card><Center>Loading...</Center></Card>;
-  if (!data) return <Card><Center>No data available</Center></Card>;
+  if (loading) return <Card h="100%"><Center>Loading...</Center></Card>;
+  if (!data) return <Card h="100%"><Center>No data available</Center></Card>;
 
   const Icon = iconMap[data.icon] || IconActivity;
 
   return (
-    <Card shadow="sm" padding="lg" radius="md">
+    <Card shadow="sm" padding="lg" radius="md" h="100%">
       <Group justify="space-between" mb="md">
         <Group>
           <ThemeIcon size="lg" color={data.color} variant="light">
             <Icon size={24} />
           </ThemeIcon>
           <div>
-            <Title order={3}>{data.title}</Title>
-            <Text size="sm" c="dimmed">{data.description}</Text>
+            <Title order={3}>Experiment Overview</Title>
+            <Text size="sm" c="dimmed">General system performance metrics</Text>
           </div>
         </Group>
         {isLive && (
@@ -180,7 +153,7 @@ const ExperimentSummary: React.FC<{ scenario: string; isLive: boolean }> = ({ sc
 
       <Stack gap="md">
         <Paper p="md" withBorder>
-          <Text size="sm" fw={500} mb="xs">Experiment Overview</Text>
+          <Text size="sm" fw={500} mb="xs">System Overview</Text>
           <Grid gutter="xs">
             <Grid.Col span={6}>
               <Text size="xs" c="dimmed">Total Clients</Text>
@@ -247,9 +220,9 @@ const ExperimentSummary: React.FC<{ scenario: string; isLive: boolean }> = ({ sc
           </Stack>
         </Paper>
 
-        <Alert icon={<IconActivity size={16} />} color={data.color} variant="light">
-          <Text size="sm" fw={500}>Expected Behavior</Text>
-          <Text size="xs">{data.expected_behavior}</Text>
+        <Alert icon={<IconActivity size={16} />} color="blue" variant="light">
+          <Text size="sm" fw={500}>Current System Status</Text>
+          <Text size="xs">Monitoring all active experiments and client behaviors</Text>
         </Alert>
       </Stack>
     </Card>
@@ -285,13 +258,13 @@ const SuccessCriteria: React.FC<{ scenario: string }> = ({ scenario }) => {
   const score = criteria.score || 0;
 
   return (
-    <Card shadow="sm" padding="lg" radius="md" h="100%">
+    <Card shadow="sm" padding="lg" radius="md" h="100%" style={{ display: 'flex', flexDirection: 'column' }}>
       <Title order={3} mb="md">Success Criteria</Title>
       
       <Center mb="md">
         <RingProgress
-          size={120}
-          thickness={12}
+          size={140}
+          thickness={16}
           roundCaps
           sections={[{ value: score, color: score >= 80 ? 'green' : score >= 60 ? 'yellow' : 'red' }]}
           label={
@@ -300,9 +273,9 @@ const SuccessCriteria: React.FC<{ scenario: string }> = ({ scenario }) => {
                 color={score >= 80 ? 'green' : score >= 60 ? 'yellow' : 'red'}
                 variant="light"
                 radius="xl"
-                size="xl"
+                size={48}
               >
-                {score >= 80 ? <IconMoodSmile size={30} /> : <IconMoodSad size={30} />}
+                {score >= 80 ? <IconMoodSmile size={24} /> : <IconMoodSad size={24} />}
               </ThemeIcon>
             </Center>
           }
@@ -344,55 +317,93 @@ const SuccessCriteria: React.FC<{ scenario: string }> = ({ scenario }) => {
   );
 };
 
-// Scenario Timeline Component
-const ScenarioTimeline: React.FC<{ scenario: string }> = ({ scenario }) => {
-  const [timeline, setTimeline] = useState<any>(null);
-  const [currentPhase, setCurrentPhase] = useState(0);
+// Tabbed Scenario Timeline Component
+const TabbedScenarioTimeline: React.FC<{ activeScenario: string; setActiveScenario: (scenario: string) => void }> = ({ activeScenario, setActiveScenario }) => {
+  const [timelines, setTimelines] = useState<Record<string, any>>({});
+  const [currentPhases, setCurrentPhases] = useState<Record<string, number>>({});
+
+  const scenarios = [
+    { value: 'morning-rush', label: 'Morning Rush', icon: IconUsers },
+    { value: 'script-kiddie', label: 'Script Kiddie', icon: IconBug },
+    { value: 'ddos', label: 'DDoS Attack', icon: IconRocket },
+    { value: 'botnet', label: 'Botnet', icon: IconWorld },
+    { value: 'mixed', label: 'Mixed Reality', icon: IconBrain },
+  ];
 
   useEffect(() => {
-    const fetchTimeline = async () => {
+    const fetchTimeline = async (scenario: string) => {
       try {
         const response = await fetch(`${API_BASE}/api/v1/experiment/timeline?scenario=${scenario}`);
         const result = await response.json();
-        setTimeline(result);
+        setTimelines(prev => ({ ...prev, [scenario]: result }));
+        setCurrentPhases(prev => ({ ...prev, [scenario]: 0 }));
       } catch (error) {
-        console.error('Failed to fetch timeline:', error);
+        console.error(`Failed to fetch timeline for ${scenario}:`, error);
       }
     };
 
-    fetchTimeline();
-  }, [scenario]);
+    // Fetch timeline for active scenario if not already loaded
+    if (!timelines[activeScenario]) {
+      fetchTimeline(activeScenario);
+    }
+  }, [activeScenario]);
 
   useEffect(() => {
-    if (timeline?.events) {
-      const interval = setInterval(() => {
-        setCurrentPhase((prev) => (prev + 1) % timeline.events.length);
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [timeline]);
+    const interval = setInterval(() => {
+      setCurrentPhases(prev => {
+        const updated = { ...prev };
+        Object.keys(timelines).forEach(scenario => {
+          if (timelines[scenario]?.events) {
+            updated[scenario] = (prev[scenario] + 1) % timelines[scenario].events.length;
+          }
+        });
+        return updated;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [timelines]);
 
-  if (!timeline) return <Card><Center>Loading timeline...</Center></Card>;
+  const timeline = timelines[activeScenario];
+  const currentPhase = currentPhases[activeScenario] || 0;
 
   return (
-    <Card shadow="sm" padding="lg" radius="md">
+    <Card shadow="sm" padding="lg" radius="md" h="100%">
       <Title order={3} mb="md">Scenario Timeline</Title>
-      <Timeline active={currentPhase} bulletSize={24} lineWidth={2}>
-        {timeline.events?.map((event: any, idx: number) => {
-          const Icon = iconMap[event.icon] || IconActivity;
-          return (
-            <Timeline.Item
-              key={idx}
-              bullet={<Icon size={14} />}
-              color={event.color}
-              title={event.event}
-              active={idx <= currentPhase}
-            >
-              <Text c="dimmed" size="sm">{event.time}</Text>
-            </Timeline.Item>
-          );
-        })}
-      </Timeline>
+      
+      <Tabs value={activeScenario} onChange={(value) => value && setActiveScenario(value)}>
+        <Tabs.List>
+          {scenarios.map((scenario) => {
+            const Icon = scenario.icon;
+            return (
+              <Tabs.Tab key={scenario.value} value={scenario.value} leftSection={<Icon size={14} />}>
+                {scenario.label}
+              </Tabs.Tab>
+            );
+          })}
+        </Tabs.List>
+
+        <Tabs.Panel value={activeScenario} pt="md">
+          {!timeline ? (
+            <Center>Loading timeline...</Center>
+          ) : (
+            <Timeline active={currentPhase} bulletSize={24} lineWidth={2}>
+              {timeline.events?.map((event: any, idx: number) => {
+                const Icon = iconMap[event.icon] || IconActivity;
+                return (
+                  <Timeline.Item
+                    key={idx}
+                    bullet={<Icon size={14} />}
+                    color={event.color}
+                    title={event.event}
+                  >
+                    <Text c="dimmed" size="sm">{event.time}</Text>
+                  </Timeline.Item>
+                );
+              })}
+            </Timeline>
+          )}
+        </Tabs.Panel>
+      </Tabs>
     </Card>
   );
 };
@@ -428,11 +439,11 @@ const ClientDistributionAnalysis: React.FC = () => {
   }, []);
 
   return (
-    <Card shadow="sm" padding="lg" radius="md">
+    <Card shadow="sm" padding="lg" radius="md" h="100%">
       <Title order={3} mb="md">Client Distribution</Title>
       <DonutChart
         data={data}
-        h={250}
+        h={350}
         withLabels
         withTooltip
         chartLabel={`${data.reduce((sum, d) => sum + d.value, 0)} clients`}
@@ -442,8 +453,8 @@ const ClientDistributionAnalysis: React.FC = () => {
   );
 };
 
-// Performance Metrics
-const PerformanceMetrics: React.FC = () => {
+// Failure Rate Metrics
+const FailureRateMetrics: React.FC = () => {
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
@@ -464,14 +475,51 @@ const PerformanceMetrics: React.FC = () => {
 
   return (
     <Card shadow="sm" padding="lg" radius="md">
-      <Title order={3} mb="md">Performance by Difficulty</Title>
+      <Title order={3} mb="md">Failure Rate by Difficulty</Title>
       <BarChart
         h={250}
         data={data}
         dataKey="difficulty"
         series={[
-          { name: 'avgSolveTime', color: 'indigo.6', label: 'Avg Solve (ms)' },
           { name: 'failureRate', color: 'red.6', label: 'Failure Rate (%)' },
+        ]}
+        tickLine="y"
+        withLegend
+        legendProps={{ verticalAlign: 'bottom' }}
+      />
+    </Card>
+  );
+};
+
+// Solve Time Metrics
+const SolveTimeMetrics: React.FC = () => {
+  const [data, setData] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/experiment/performance`);
+        const result = await response.json();
+        setData(result.data || []);
+      } catch (error) {
+        console.error('Failed to fetch performance data:', error);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <Card shadow="sm" padding="lg" radius="md">
+      <Title order={3} mb="md">Average Solve Time by Difficulty</Title>
+      <BarChart
+        h={250}
+        data={data}
+        dataKey="difficulty"
+        series={[
+          { name: 'avgSolveTime', color: 'indigo.6', label: 'Avg Solve Time (ms)' },
         ]}
         tickLine="y"
         withLegend
