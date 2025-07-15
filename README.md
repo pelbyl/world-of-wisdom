@@ -550,6 +550,53 @@ The algorithm identifies several DDoS attack patterns:
    - **Resource Efficiency**: 60% less server CPU usage under attack
    - **User Experience**: 98% of legitimate users maintain difficulty 1-2
 
+### 🧪 Experiment Tools
+
+The system includes comprehensive tools for testing and validating the adaptive difficulty system:
+
+#### 1. **Experiment Analytics UI**
+Access the experiment dashboard at http://localhost:3000 (Experiment Analytics tab):
+- **Scenario Selection**: Choose from 5 predefined attack scenarios
+- **Live Mode**: Real-time monitoring of ongoing experiments
+- **Success Criteria**: Visual indicators showing system performance
+- **Attack Mitigation**: Metrics on detection rate and effectiveness
+
+#### 2. **Scenario Commands**
+Run experiment scenarios directly from the Makefile:
+```bash
+make scenario-morning-rush     # Legitimate traffic spike
+make scenario-script-kiddie    # Basic automated attack  
+make scenario-ddos            # Sophisticated DDoS attack
+make scenario-botnet          # Distributed botnet simulation
+make scenario-mixed           # Mixed reality scenario
+
+# Control commands
+make scenario-status          # Check scenario status
+make scenario-logs           # View scenario logs
+make scenario-stop           # Stop all scenarios
+```
+
+#### 3. **Monitoring Dashboard**
+All monitoring is integrated into the web UI:
+```bash
+make monitor                  # Opens http://localhost:3000
+```
+
+The dashboard includes:
+- Real-time client behaviors with per-IP difficulty
+- Color-coded status indicators (Green/Yellow/Red)
+- System performance metrics and charts
+- Attack detection alerts
+- Experiment analytics with success criteria
+
+#### 4. **Docker Compose Scenarios**
+The `docker-compose.scenario.yml` file provides pre-configured client types:
+- **Normal Users**: 1-2 connections/min, 1-3s solve time
+- **Power Users**: 5-10 connections/min, 0.5-2s solve time
+- **Script Kiddies**: 20-50 connections/min, 50-200ms solve time
+- **Sophisticated Attackers**: 100+ connections/min, 10-100ms solve time
+- **Botnet Nodes**: 10-30 connections/min, 100-500ms solve time
+
 ### 🖼️ Frontend Demo
 
 ![front-demo](images/front-demo.png)

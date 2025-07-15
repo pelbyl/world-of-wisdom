@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # Normal Users (10 instances)
+  normal-user:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=8080
+      - CLIENT_TYPE=normal
+      - SOLVE_DELAY_MS=1500
+      - CONNECTION_DELAY_MS=30000
+      - MAX_ATTEMPTS=100
+      - CLIENT_DELAY_MS=2000
+    networks:
+      - wisdom-network
+    deploy:
+      replicas: 10
+    depends_on:
+      - server
+
+  # Power Users (5 instances)
+  power-user:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=8080
+      - CLIENT_TYPE=fast
+      - SOLVE_DELAY_MS=750
+      - CONNECTION_DELAY_MS=6000
+      - MAX_ATTEMPTS=500
+      - CLIENT_DELAY_MS=1000
+    networks:
+      - wisdom-network
+    deploy:
+      replicas: 5
+    depends_on:
+      - server
+
+  # Script Kiddies (3 instances)
+  script-kiddie:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=8080
+      - CLIENT_TYPE=attacker
+      - SOLVE_DELAY_MS=125
+      - CONNECTION_DELAY_MS=1200
+      - MAX_ATTEMPTS=1000
+      - ATTACK_MODE=true
+      - CLIENT_DELAY_MS=100
+    networks:
+      - wisdom-network
+    deploy:
+      replicas: 3
+    depends_on:
+      - server
+
+  # Sophisticated Attackers (2 instances)
+  sophisticated-attacker:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=8080
+      - CLIENT_TYPE=attacker
+      - SOLVE_DELAY_MS=50
+      - CONNECTION_DELAY_MS=500
+      - MAX_ATTEMPTS=10000
+      - ATTACK_MODE=true
+      - FLOOD_CONNECTIONS=true
+      - CLIENT_DELAY_MS=50
+    networks:
+      - wisdom-network
+    deploy:
+      replicas: 2
+    depends_on:
+      - server
+
+  # Botnet Nodes (20 instances)
+  botnet-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      - SERVER_HOST=server
+      - SERVER_PORT=8080
+      - CLIENT_TYPE=attacker
+      - SOLVE_DELAY_MS=300
+      - CONNECTION_DELAY_MS=3000
+      - MAX_ATTEMPTS=500
+      - ATTACK_MODE=true
+      - CLIENT_DELAY_MS=200
+    networks:
+      - wisdom-network
+    deploy:
+      replicas: 20
+    depends_on:
+      - server
+
+networks:
+  wisdom-network:
+    external: true

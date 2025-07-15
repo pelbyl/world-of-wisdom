@@ -33,5 +33,13 @@ func (s *Server) SetupRoutes() *echo.Echo {
 	e.GET("/api/v1/logs", s.GetLogs)
 	e.GET("/api/v1/client-behaviors", s.GetClientBehaviors)
 	
+	// Experiment Analytics endpoints
+	e.GET("/api/v1/experiment/summary", s.GetExperimentSummary)
+	e.GET("/api/v1/experiment/success-criteria", s.GetSuccessCriteria)
+	e.GET("/api/v1/experiment/timeline", s.GetScenarioTimeline)
+	e.GET("/api/v1/experiment/performance", s.GetPerformanceMetrics)
+	e.GET("/api/v1/experiment/mitigation", s.GetAttackMitigation)
+	e.GET("/api/v1/experiment/comparison", s.GetExperimentComparison)
+	
 	return e
 }

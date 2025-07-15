@@ -68,6 +68,88 @@ demo-ddos-logs:
 	@echo "📝 Showing DDoS demo logs..."
 	docker-compose -f docker-compose.ddos.yml logs -f
 
+# Experiment Scenarios
+scenario-morning-rush:
+	@echo "🌅 Starting Morning Rush scenario..."
+	@echo "Simulating legitimate traffic spike with normal and power users"
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale normal-user=0 --scale power-user=0 --scale script-kiddie=0 --scale sophisticated-attacker=0 --scale botnet-node=0
+	@sleep 2
+	@echo "Phase 1: 10 normal users connecting gradually..."
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale normal-user=$$i --no-recreate; \
+		sleep 30; \
+	done
+	@echo "Phase 2: 5 power users joining..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale power-user=5 --no-recreate
+	@echo "✅ Morning Rush scenario started!"
+	@echo "📊 Monitor at http://localhost:3000"
+
+scenario-script-kiddie:
+	@echo "🐛 Starting Script Kiddie Attack scenario..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale normal-user=5 --scale power-user=0 --scale script-kiddie=0 --scale sophisticated-attacker=0 --scale botnet-node=0
+	@sleep 120
+	@echo "Attack starting: 1 script kiddie..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale script-kiddie=1 --no-recreate
+	@echo "✅ Script Kiddie scenario started!"
+	@echo "📊 Monitor at http://localhost:3000"
+
+scenario-ddos:
+	@echo "🚨 Starting Sophisticated DDoS scenario..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale normal-user=10 --scale power-user=2 --scale script-kiddie=0 --scale sophisticated-attacker=0 --scale botnet-node=0
+	@sleep 180
+	@echo "DDoS attack beginning: 3 sophisticated attackers..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale sophisticated-attacker=3 --no-recreate
+	@echo "✅ DDoS scenario started!"
+	@echo "📊 Monitor at http://localhost:3000"
+
+scenario-botnet:
+	@echo "🤖 Starting Botnet Simulation..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale normal-user=8 --scale power-user=0 --scale script-kiddie=0 --scale sophisticated-attacker=0 --scale botnet-node=0
+	@sleep 120
+	@echo "Botnet activating: 20 nodes..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale botnet-node=20 --no-recreate
+	@echo "✅ Botnet scenario started!"
+	@echo "📊 Monitor at http://localhost:3000"
+
+scenario-mixed:
+	@echo "🌐 Starting Mixed Reality scenario..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale normal-user=7 --scale power-user=2 --scale script-kiddie=0 --scale sophisticated-attacker=0 --scale botnet-node=0
+	@echo "✅ Mixed scenario started with baseline traffic"
+	@echo "📊 Monitor at http://localhost:3000"
+	@echo "ℹ️  Use 'make scenario-add-attackers' to add various attack types"
+
+scenario-add-attackers:
+	@echo "Adding attackers to mixed scenario..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml up -d --scale script-kiddie=2 --scale sophisticated-attacker=1 --scale botnet-node=2 --no-recreate
+
+scenario-stop:
+	@echo "🛑 Stopping all scenario containers..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml stop normal-user power-user script-kiddie sophisticated-attacker botnet-node
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml rm -f normal-user power-user script-kiddie sophisticated-attacker botnet-node
+	@echo "✅ All scenario clients stopped!"
+
+scenario-status:
+	@echo "📊 Scenario container status:"
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml ps
+
+scenario-logs:
+	@echo "📝 Showing scenario logs..."
+	@docker-compose -f docker-compose.yml -f docker-compose.scenario.yml logs -f
+
+# Monitor experiment
+monitor:
+	@echo "📊 Opening monitoring dashboard..."
+	@echo "Dashboard available at http://localhost:3000"
+	@echo ""
+	@echo "The UI provides real-time monitoring of:"
+	@echo "  - Client behaviors with per-IP difficulty"
+	@echo "  - System metrics and performance"
+	@echo "  - Attack detection and alerts"
+	@echo "  - Success criteria evaluation"
+	@echo ""
+	@echo "For experiment analytics, navigate to the 'Experiment Analytics' tab"
+	@open http://localhost:3000 || xdg-open http://localhost:3000 || echo "Please open http://localhost:3000 in your browser"
+
 # Code generation targets
 generate: sqlc oapi-codegen
 	@echo "✅ All code generation complete!"
