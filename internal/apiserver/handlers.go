@@ -44,7 +44,13 @@ func (s *Server) GetHealth(c echo.Context) error {
 	liveConnections := int(connectionStats.ActiveConnections)
 	totalBlocks := 0 // TODO: Get from blockchain when available
 	miningActive := true
-	difficulty := 2
+	
+	// Get current difficulty from most recent challenge
+	difficulty := 2 // default
+	recentChallenges, err := s.repo.Challenges().GetRecent(ctx, 1)
+	if err == nil && len(recentChallenges) > 0 {
+		difficulty = int(recentChallenges[0].Difficulty)
+	}
 	algorithm := HealthDataAlgorithmArgon2
 	
 	healthData := HealthData{
@@ -77,7 +83,13 @@ func (s *Server) GetStats(c echo.Context) error {
 	totalChallenges := int(challengeStats.TotalCount)
 	completedChallenges := int(challengeStats.CompletedCount)
 	averageSolveTime := float32(challengeStats.AvgSolveTimeMs)
-	currentDifficulty := 2
+	
+	// Get current difficulty from most recent challenge
+	currentDifficulty := 2 // default
+	recentChallenges, err := s.repo.Challenges().GetRecent(ctx, 1)
+	if err == nil && len(recentChallenges) > 0 {
+		currentDifficulty = int(recentChallenges[0].Difficulty)
+	}
 	hashRate := float32(0.0)
 	
 	totalConnections := int(connectionStats.TotalConnections)

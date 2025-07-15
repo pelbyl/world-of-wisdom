@@ -313,8 +313,7 @@ export function MetricsDashboard() {
                   dataKey="time"
                   xAxisLabel=""
                   series={[
-                    { name: 'connections', color: 'blue.6', label: 'Total Connections' },
-                    { name: 'activeConnections', color: 'green.6', label: 'Active' }
+                    { name: 'activeConnections', color: 'green.6', label: 'Active Connections' }
                   ]}
                   withLegend
                   withDots={false}
