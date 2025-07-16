@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -49,8 +50,8 @@ type Server struct {
 	// Client behavior tracking
 	behaviorTracker *behavior.Tracker
 	
-	// HMAC signing key for secure challenges
-	signingKey []byte
+	// HMAC key management for secure challenges
+	keyManager *pow.KeyManager
 	
 	// Challenge protocol format
 	challengeFormat pow.ChallengeFormat // "json" or "binary"
@@ -109,11 +110,16 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("invalid algorithm: %s (must be sha256 or argon2)", algorithm)
 	}
 
-	// Generate a signing key for secure challenges
-	signingKey := make([]byte, 32)
-	if _, err := rand.Read(signingKey); err != nil {
-		return nil, fmt.Errorf("failed to generate signing key: %w", err)
+	// Initialize key manager for HMAC signing
+	keyPath := os.Getenv("WOW_KEY_PATH")
+	if keyPath == "" {
+		keyPath = "wow-hmac-keys.json"
 	}
+	keyManager, err := pow.NewKeyManager(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
+	}
+	log.Printf("✅ HMAC key manager initialized with persistent storage")
 
 	// Default to binary format if not specified
 	challengeFormat := pow.ChallengeFormat(cfg.ChallengeFormat)
@@ -137,7 +143,7 @@ func NewServer(cfg Config) (*Server, error) {
 		adaptiveMode:     cfg.AdaptiveMode,
 		algorithm:        algorithm,
 		behaviorTracker:  behavior.NewTracker(dbpool),
-		signingKey:       signingKey,
+		keyManager:       keyManager,
 		challengeFormat:  challengeFormat,
 		challengeEncoder: pow.NewChallengeEncoder(challengeFormat),
 	}, nil
@@ -305,8 +311,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 	var challengeSeed string
 	var verifySolution func(string) bool
 
-	// Use secure challenge generation with JSON format
-	secureChallenge, err = pow.GenerateSecureChallenge(difficulty, s.algorithm, clientID, s.signingKey)
+	// Use secure challenge generation with key manager
+	secureChallenge, err = pow.GenerateSecureChallengeWithKeyManager(difficulty, s.algorithm, clientID, s.keyManager)
 	if err != nil {
 		log.Printf("Failed to generate secure challenge: %v", err)
 		conn.Write([]byte("Error: Failed to generate challenge\n"))

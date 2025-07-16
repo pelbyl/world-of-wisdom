@@ -43,28 +43,96 @@ type Argon2Params struct {
 
 // HMACSignature handles HMAC signing and verification
 type HMACSignature struct {
-	key []byte
+	keyManager *KeyManager
 }
 
-// NewHMACSignature creates a new HMAC signature instance
-func NewHMACSignature(key []byte) *HMACSignature {
-	return &HMACSignature{key: key}
+// NewHMACSignature creates a new HMAC signature instance with key manager
+func NewHMACSignature(keyManager *KeyManager) *HMACSignature {
+	return &HMACSignature{keyManager: keyManager}
 }
 
 // Sign creates an HMAC signature for the given data
 func (s *HMACSignature) Sign(data []byte) []byte {
-	h := hmac.New(sha256.New, s.key)
+	key := s.keyManager.GetCurrentKey()
+	h := hmac.New(sha256.New, key)
 	h.Write(data)
 	return h.Sum(nil)
 }
 
-// Verify validates an HMAC signature
+// Verify validates an HMAC signature, trying both current and previous keys
 func (s *HMACSignature) Verify(data, signature []byte) bool {
-	expected := s.Sign(data)
-	return hmac.Equal(expected, signature)
+	currentKey, previousKey := s.keyManager.GetKeys()
+	
+	// Try current key first
+	h := hmac.New(sha256.New, currentKey)
+	h.Write(data)
+	expected := h.Sum(nil)
+	if hmac.Equal(expected, signature) {
+		return true
+	}
+	
+	// Try previous key if it exists (for key rotation support)
+	if previousKey != nil {
+		h = hmac.New(sha256.New, previousKey)
+		h.Write(data)
+		expected = h.Sum(nil)
+		return hmac.Equal(expected, signature)
+	}
+	
+	return false
 }
 
-// GenerateSecureChallenge creates a new secure challenge with HMAC signature
+// GenerateSecureChallengeWithKeyManager creates a new secure challenge with HMAC signature using key manager
+func GenerateSecureChallengeWithKeyManager(difficulty int, algorithm string, clientID string, keyManager *KeyManager) (*SecureChallenge, error) {
+	if difficulty < 1 || difficulty > 6 {
+		return nil, fmt.Errorf("difficulty must be between 1 and 6, got %d", difficulty)
+	}
+
+	// Generate random seed
+	seedBytes := make([]byte, 16)
+	if _, err := rand.Read(seedBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate random seed: %w", err)
+	}
+
+	// Generate random nonce for replay prevention
+	nonceBytes := make([]byte, 8)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate random nonce: %w", err)
+	}
+
+	now := time.Now()
+	expiresAt := now.Add(5 * time.Minute)
+
+	challenge := &SecureChallenge{
+		Version:    1,
+		Seed:       hex.EncodeToString(seedBytes),
+		Difficulty: difficulty,
+		Algorithm:  algorithm,
+		ClientID:   clientID,
+		Timestamp:  now.UnixMicro(),
+		ExpiresAt:  expiresAt.UnixMicro(),
+		Nonce:      hex.EncodeToString(nonceBytes),
+	}
+
+	// Set Argon2 parameters if needed
+	if algorithm == "argon2" {
+		challenge.Argon2Params = &Argon2Params{
+			Time:      1,
+			Memory:    64 * 1024, // 64MB
+			Threads:   4,
+			KeyLength: 32,
+		}
+	}
+
+	// Create signature
+	if err := challenge.SignWithKeyManager(keyManager); err != nil {
+		return nil, fmt.Errorf("failed to sign challenge: %w", err)
+	}
+
+	return challenge, nil
+}
+
+// GenerateSecureChallenge creates a new secure challenge with HMAC signature (deprecated - use GenerateSecureChallengeWithKeyManager)
 func GenerateSecureChallenge(difficulty int, algorithm string, clientID string, signingKey []byte) (*SecureChallenge, error) {
 	if difficulty < 1 || difficulty > 6 {
 		return nil, fmt.Errorf("difficulty must be between 1 and 6, got %d", difficulty)
@@ -114,7 +182,7 @@ func GenerateSecureChallenge(difficulty int, algorithm string, clientID string, 
 	return challenge, nil
 }
 
-// Sign creates an HMAC signature for the challenge
+// Sign creates an HMAC signature for the challenge (deprecated - use SignWithKeyManager)
 func (c *SecureChallenge) Sign(key []byte) error {
 	// Create a copy without signature for signing
 	temp := *c
@@ -126,15 +194,16 @@ func (c *SecureChallenge) Sign(key []byte) error {
 		return fmt.Errorf("failed to marshal challenge for signing: %w", err)
 	}
 
-	// Create HMAC signature
-	signer := NewHMACSignature(key)
-	signature := signer.Sign(data)
+	// Create HMAC signature directly with the key
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	signature := h.Sum(nil)
 	c.Signature = base64.StdEncoding.EncodeToString(signature)
 
 	return nil
 }
 
-// Verify validates the challenge's HMAC signature
+// Verify validates the challenge's HMAC signature (deprecated - use VerifyWithKeyManager)
 func (c *SecureChallenge) Verify(key []byte) error {
 	if c.Signature == "" {
 		return fmt.Errorf("challenge has no signature")
@@ -156,8 +225,61 @@ func (c *SecureChallenge) Verify(key []byte) error {
 		return fmt.Errorf("failed to marshal challenge for verification: %w", err)
 	}
 
+	// Verify HMAC signature directly with the key
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	expected := h.Sum(nil)
+	if !hmac.Equal(expected, signature) {
+		return fmt.Errorf("invalid HMAC signature")
+	}
+
+	return nil
+}
+
+// SignWithKeyManager creates an HMAC signature for the challenge using key manager
+func (c *SecureChallenge) SignWithKeyManager(keyManager *KeyManager) error {
+	// Create a copy without signature for signing
+	temp := *c
+	temp.Signature = ""
+	
+	// Marshal to JSON for consistent signing
+	data, err := json.Marshal(temp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal challenge for signing: %w", err)
+	}
+
+	// Create HMAC signature
+	signer := NewHMACSignature(keyManager)
+	signature := signer.Sign(data)
+	c.Signature = base64.StdEncoding.EncodeToString(signature)
+
+	return nil
+}
+
+// VerifyWithKeyManager validates the challenge's HMAC signature using key manager
+func (c *SecureChallenge) VerifyWithKeyManager(keyManager *KeyManager) error {
+	if c.Signature == "" {
+		return fmt.Errorf("challenge has no signature")
+	}
+
+	// Decode signature
+	signature, err := base64.StdEncoding.DecodeString(c.Signature)
+	if err != nil {
+		return fmt.Errorf("failed to decode signature: %w", err)
+	}
+
+	// Create a copy without signature for verification
+	temp := *c
+	temp.Signature = ""
+	
+	// Marshal to JSON for consistent verification
+	data, err := json.Marshal(temp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal challenge for verification: %w", err)
+	}
+
 	// Verify HMAC signature
-	signer := NewHMACSignature(key)
+	signer := NewHMACSignature(keyManager)
 	if !signer.Verify(data, signature) {
 		return fmt.Errorf("invalid HMAC signature")
 	}
