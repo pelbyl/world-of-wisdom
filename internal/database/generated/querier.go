@@ -19,11 +19,14 @@ type Querier interface {
 	CreateClientBehavior(ctx context.Context, db DBTX, ipAddress netip.Addr) (ClientBehavior, error)
 	CreateConnection(ctx context.Context, db DBTX, arg CreateConnectionParams) (Connection, error)
 	CreateConnectionTimestamp(ctx context.Context, db DBTX, ipAddress netip.Addr) (ConnectionTimestamp, error)
+	CreateHMACKey(ctx context.Context, db DBTX, arg CreateHMACKeyParams) (HmacKey, error)
 	CreateLog(ctx context.Context, db DBTX, arg CreateLogParams) (Log, error)
 	CreateSolution(ctx context.Context, db DBTX, arg CreateSolutionParams) (Solution, error)
+	DeactivateHMACKeys(ctx context.Context, db DBTX) error
 	DeleteOldLogs(ctx context.Context, db DBTX) error
 	GetActiveClients(ctx context.Context, db DBTX, limit int32) ([]GetActiveClientsRow, error)
 	GetActiveConnections(ctx context.Context, db DBTX) ([]Connection, error)
+	GetActiveHMACKey(ctx context.Context, db DBTX) (HmacKey, error)
 	// Get aggregated metrics with configurable time bucket
 	GetAggregatedMetrics(ctx context.Context, db DBTX, arg GetAggregatedMetricsParams) ([]GetAggregatedMetricsRow, error)
 	// Get overall system statistics (simplified without blocks)
@@ -47,8 +50,10 @@ type Querier interface {
 	GetConnectionStats(ctx context.Context, db DBTX) (GetConnectionStatsRow, error)
 	// Get connections with optional status filter for API endpoint
 	GetConnectionsFiltered(ctx context.Context, db DBTX, status ConnectionStatus) ([]Connection, error)
+	GetHMACKeyByVersion(ctx context.Context, db DBTX, keyVersion int32) (HmacKey, error)
 	// Get historical hash rate data for charts (using solutions table)
 	GetHashRateHistory(ctx context.Context, db DBTX) ([]GetHashRateHistoryRow, error)
+	GetLatestHMACKeys(ctx context.Context, db DBTX, limit int32) ([]HmacKey, error)
 	GetLogsByLevel(ctx context.Context, db DBTX, arg GetLogsByLevelParams) ([]Log, error)
 	GetLogsInTimeRange(ctx context.Context, db DBTX, arg GetLogsInTimeRangeParams) ([]Log, error)
 	GetLogsPaginated(ctx context.Context, db DBTX, arg GetLogsPaginatedParams) ([]Log, error)

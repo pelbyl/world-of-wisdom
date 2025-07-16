@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// KeyManager handles HMAC key generation, storage, and rotation
-type KeyManager struct {
+// FileKeyManager handles HMAC key generation, storage, and rotation using file storage
+type FileKeyManager struct {
 	mu          sync.RWMutex
 	currentKey  []byte
 	previousKey []byte
@@ -28,9 +28,9 @@ type KeyData struct {
 	Version     int       `json:"version"`
 }
 
-// NewKeyManager creates a new key manager with persistent storage
-func NewKeyManager(keyPath string) (*KeyManager, error) {
-	km := &KeyManager{
+// NewFileKeyManager creates a new file-based key manager with persistent storage
+func NewFileKeyManager(keyPath string) (*FileKeyManager, error) {
+	km := &FileKeyManager{
 		keyPath: keyPath,
 	}
 
@@ -50,7 +50,7 @@ func NewKeyManager(keyPath string) (*KeyManager, error) {
 }
 
 // GetCurrentKey returns the current signing key
-func (km *KeyManager) GetCurrentKey() []byte {
+func (km *FileKeyManager) GetCurrentKey() []byte {
 	km.mu.RLock()
 	defer km.mu.RUnlock()
 	
@@ -60,7 +60,7 @@ func (km *KeyManager) GetCurrentKey() []byte {
 }
 
 // GetKeys returns both current and previous keys for verification
-func (km *KeyManager) GetKeys() (current, previous []byte) {
+func (km *FileKeyManager) GetKeys() (current, previous []byte) {
 	km.mu.RLock()
 	defer km.mu.RUnlock()
 	
@@ -76,7 +76,7 @@ func (km *KeyManager) GetKeys() (current, previous []byte) {
 }
 
 // RotateKeys generates a new key and moves current to previous
-func (km *KeyManager) RotateKeys() error {
+func (km *FileKeyManager) RotateKeys() error {
 	km.mu.Lock()
 	defer km.mu.Unlock()
 
@@ -96,7 +96,7 @@ func (km *KeyManager) RotateKeys() error {
 }
 
 // loadKeys loads keys from persistent storage
-func (km *KeyManager) loadKeys() error {
+func (km *FileKeyManager) loadKeys() error {
 	data, err := os.ReadFile(km.keyPath)
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func (km *KeyManager) loadKeys() error {
 }
 
 // saveKeys persists keys to storage
-func (km *KeyManager) saveKeys() error {
+func (km *FileKeyManager) saveKeys() error {
 	keyData := KeyData{
 		CurrentKey: base64.StdEncoding.EncodeToString(km.currentKey),
 		RotatedAt:  km.rotatedAt,
@@ -159,7 +159,7 @@ func (km *KeyManager) saveKeys() error {
 }
 
 // generateAndSaveKeys generates initial keys and saves them
-func (km *KeyManager) generateAndSaveKeys() error {
+func (km *FileKeyManager) generateAndSaveKeys() error {
 	key := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return fmt.Errorf("failed to generate key: %w", err)
@@ -172,7 +172,7 @@ func (km *KeyManager) generateAndSaveKeys() error {
 }
 
 // GetRotationAge returns how long since the last key rotation
-func (km *KeyManager) GetRotationAge() time.Duration {
+func (km *FileKeyManager) GetRotationAge() time.Duration {
 	km.mu.RLock()
 	defer km.mu.RUnlock()
 	return time.Since(km.rotatedAt)

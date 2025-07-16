@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"world-of-wisdom/pkg/logger"
 	"world-of-wisdom/pkg/pow"
 )
 
@@ -114,7 +115,7 @@ func (c *Client) attemptRequestQuote() (string, error) {
 	}
 	elapsed := time.Since(start)
 
-	log.Printf("Solved challenge in %v, sending solution: %s", elapsed, solution)
+	log.Printf("Solved challenge in %v, sending solution: %s", elapsed, logger.MaskSensitive(solution))
 
 	_, err = conn.Write([]byte(solution + "\n"))
 	if err != nil {
@@ -152,7 +153,7 @@ func (c *Client) RequestMultipleQuotes(count int) []string {
 			continue
 		}
 		quotes = append(quotes, quote)
-		log.Printf("Quote %d/%d: %s", i+1, count, quote)
+		log.Printf("Quote %d/%d: %s", i+1, count, logger.SanitizeForLog(quote))
 
 		if i < count-1 {
 			time.Sleep(time.Second)

@@ -16,6 +16,7 @@ import (
 
 	"world-of-wisdom/internal/behavior"
 	generated "world-of-wisdom/internal/database/generated"
+	"world-of-wisdom/pkg/logger"
 	"world-of-wisdom/pkg/metrics"
 	"world-of-wisdom/pkg/pow"
 	"world-of-wisdom/pkg/wisdom"
@@ -51,7 +52,7 @@ type Server struct {
 	behaviorTracker *behavior.Tracker
 	
 	// HMAC key management for secure challenges
-	keyManager *pow.KeyManager
+	keyManager pow.KeyManager
 	
 	// Challenge protocol format
 	challengeFormat pow.ChallengeFormat // "json" or "binary"
@@ -67,6 +68,7 @@ type Config struct {
 	Algorithm       string // "sha256" or "argon2"
 	DatabaseURL     string
 	ChallengeFormat string // "json" or "binary"
+	MasterSecret    string // Master secret for key encryption (required)
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -110,16 +112,20 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("invalid algorithm: %s (must be sha256 or argon2)", algorithm)
 	}
 
-	// Initialize key manager for HMAC signing
-	keyPath := os.Getenv("WOW_KEY_PATH")
-	if keyPath == "" {
-		keyPath = "wow-hmac-keys.json"
+	// Initialize database-backed key manager for HMAC signing
+	masterSecret := cfg.MasterSecret
+	if masterSecret == "" {
+		masterSecret = os.Getenv("WOW_MASTER_SECRET")
+		if masterSecret == "" {
+			return nil, fmt.Errorf("master secret is required for HMAC key encryption (set WOW_MASTER_SECRET)")
+		}
 	}
-	keyManager, err := pow.NewKeyManager(keyPath)
+	
+	keyManager, err := pow.NewDBKeyManager(dbpool, masterSecret)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
+		return nil, fmt.Errorf("failed to initialize database key manager: %w", err)
 	}
-	log.Printf("✅ HMAC key manager initialized with persistent storage")
+	log.Printf("✅ HMAC key manager initialized with secure database storage")
 
 	// Default to binary format if not specified
 	challengeFormat := pow.ChallengeFormat(cfg.ChallengeFormat)
@@ -184,7 +190,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	startTime := time.Now()
 	clientAddr := conn.RemoteAddr().String()
 	clientID := s.generateClientID(clientAddr)
-	log.Printf("New connection from %s (Client ID: %s)", clientAddr, clientID)
+	log.Printf("New connection from %s (Client ID: %s)", logger.SanitizeIP(clientAddr), logger.MaskSensitive(clientID))
 	
 	// Context for database operations
 	ctx := context.Background()
@@ -206,25 +212,25 @@ func (s *Server) handleConnection(conn net.Conn) {
 		// Always mark connection as disconnected when handler exits
 		if connectionRecord.ID != (pgtype.UUID{}) {
 			s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusDisconnected)
-			s.logActivity(ctx, "info", fmt.Sprintf("Client disconnected: %s", clientAddr), map[string]interface{}{
-				"client_id": clientID,
+			s.logActivity(ctx, "info", fmt.Sprintf("Client disconnected: %s", logger.SanitizeIP(clientAddr)), map[string]interface{}{
+				"client_id": logger.MaskSensitive(clientID),
 				"event":     "connection_closed",
 			})
-			log.Printf("Client %s disconnected (cleanup)", clientAddr)
+			log.Printf("Client %s disconnected (cleanup)", logger.SanitizeIP(clientAddr))
 		}
 	}()
 
 	// Log new connection
-	s.logActivity(context.Background(), "info", fmt.Sprintf("New connection from %s", clientAddr), map[string]interface{}{
-		"client_id":   clientID,
-		"remote_addr": clientAddr,
+	s.logActivity(context.Background(), "info", fmt.Sprintf("New connection from %s", logger.SanitizeIP(clientAddr)), map[string]interface{}{
+		"client_id":   logger.MaskSensitive(clientID),
+		"remote_addr": logger.SanitizeIP(clientAddr),
 		"event":       "connection_established",
 	})
 
 	// Parse remote address
 	remoteAddr, err := netip.ParseAddr(strings.Split(clientAddr, ":")[0])
 	if err != nil {
-		log.Printf("Failed to parse remote address %s: %v", clientAddr, err)
+		log.Printf("Failed to parse remote address %s: %v", logger.SanitizeIP(clientAddr), err)
 		return
 	}
 
@@ -354,7 +360,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 	
-	log.Printf("Sending %s challenge to %s (size: %d bytes)", s.challengeFormat, clientAddr, len(challengeData))
+	log.Printf("Sending %s challenge to %s (size: %d bytes)", s.challengeFormat, logger.SanitizeIP(clientAddr), len(challengeData))
 
 	// Log challenge to database
 	challengeRecord, err := s.logChallenge(ctx, challengeSeed, int32(difficulty), s.algorithm, clientID)
@@ -368,7 +374,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	_, err = conn.Write(append(challengeData, '\n'))
 	if err != nil {
-		log.Printf("Failed to send challenge to %s: %v", clientAddr, err)
+		log.Printf("Failed to send challenge to %s: %v", logger.SanitizeIP(clientAddr), err)
 		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
 		return
 	}
@@ -376,11 +382,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 	solveStart := time.Now()
 	scanner := bufio.NewScanner(conn)
 	if !scanner.Scan() {
-		log.Printf("Client %s disconnected or timed out", clientAddr)
+		log.Printf("Client %s disconnected or timed out", logger.SanitizeIP(clientAddr))
 		
 		// Log disconnection
-		s.logActivity(ctx, "warning", fmt.Sprintf("Client disconnected: %s", clientAddr), map[string]interface{}{
-			"client_id": clientID,
+		s.logActivity(ctx, "warning", fmt.Sprintf("Client disconnected: %s", logger.SanitizeIP(clientAddr)), map[string]interface{}{
+			"client_id": logger.MaskSensitive(clientID),
 			"event":     "client_disconnected",
 			"reason":    "timeout_or_disconnect",
 		})
@@ -403,7 +409,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	solveTime := time.Since(solveStart)
 
 	if verifySolution(response) {
-		log.Printf("Client %s solved the %s challenge in %v", clientAddr, s.algorithm, solveTime)
+		log.Printf("Client %s solved the %s challenge in %v", logger.SanitizeIP(clientAddr), s.algorithm, solveTime)
 		s.recordSolveTime(solveTime)
 
 		// Get current reputation before update
@@ -443,8 +449,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		// Log successful solution
-		s.logActivity(ctx, "success", fmt.Sprintf("Challenge solved by %s", clientAddr), map[string]interface{}{
-			"client_id":   clientID,
+		s.logActivity(ctx, "success", fmt.Sprintf("Challenge solved by %s", logger.SanitizeIP(clientAddr)), map[string]interface{}{
+			"client_id":   logger.MaskSensitive(clientID),
 			"solve_time":  solveTime.Milliseconds(),
 			"difficulty":  difficulty,
 			"algorithm":   s.algorithm,
@@ -464,7 +470,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		quote := s.quoteProvider.GetRandomQuote()
 		conn.Write([]byte(quote + "\n"))
 	} else {
-		log.Printf("Client %s failed the %s challenge", clientAddr, s.algorithm)
+		log.Printf("Client %s failed the %s challenge", logger.SanitizeIP(clientAddr), s.algorithm)
 
 		// Get current reputation before update
 		oldBehavior, _ := s.behaviorTracker.GetClientBehavior(ctx, remoteAddr)
@@ -503,8 +509,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		// Log failed challenge
-		s.logActivity(ctx, "warning", fmt.Sprintf("Challenge failed by %s", clientAddr), map[string]interface{}{
-			"client_id":   clientID,
+		s.logActivity(ctx, "warning", fmt.Sprintf("Challenge failed by %s", logger.SanitizeIP(clientAddr)), map[string]interface{}{
+			"client_id":   logger.MaskSensitive(clientID),
 			"solve_time":  solveTime.Milliseconds(),
 			"difficulty":  difficulty,
 			"algorithm":   s.algorithm,

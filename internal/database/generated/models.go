@@ -200,6 +200,17 @@ type ConnectionTimestamp struct {
 	ChallengeCompleted pgtype.Bool        `json:"challenge_completed"`
 }
 
+type HmacKey struct {
+	ID                   pgtype.UUID        `json:"id"`
+	KeyVersion           int32              `json:"key_version"`
+	EncryptedKey         string             `json:"encrypted_key"`
+	PreviousEncryptedKey pgtype.Text        `json:"previous_encrypted_key"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	RotatedAt            pgtype.Timestamptz `json:"rotated_at"`
+	IsActive             pgtype.Bool        `json:"is_active"`
+	Metadata             []byte             `json:"metadata"`
+}
+
 type Log struct {
 	ID        pgtype.UUID        `json:"id"`
 	Timestamp pgtype.Timestamptz `json:"timestamp"`

@@ -43,11 +43,11 @@ type Argon2Params struct {
 
 // HMACSignature handles HMAC signing and verification
 type HMACSignature struct {
-	keyManager *KeyManager
+	keyManager KeyManager
 }
 
 // NewHMACSignature creates a new HMAC signature instance with key manager
-func NewHMACSignature(keyManager *KeyManager) *HMACSignature {
+func NewHMACSignature(keyManager KeyManager) *HMACSignature {
 	return &HMACSignature{keyManager: keyManager}
 }
 
@@ -83,7 +83,7 @@ func (s *HMACSignature) Verify(data, signature []byte) bool {
 }
 
 // GenerateSecureChallengeWithKeyManager creates a new secure challenge with HMAC signature using key manager
-func GenerateSecureChallengeWithKeyManager(difficulty int, algorithm string, clientID string, keyManager *KeyManager) (*SecureChallenge, error) {
+func GenerateSecureChallengeWithKeyManager(difficulty int, algorithm string, clientID string, keyManager KeyManager) (*SecureChallenge, error) {
 	if difficulty < 1 || difficulty > 6 {
 		return nil, fmt.Errorf("difficulty must be between 1 and 6, got %d", difficulty)
 	}
@@ -237,7 +237,7 @@ func (c *SecureChallenge) Verify(key []byte) error {
 }
 
 // SignWithKeyManager creates an HMAC signature for the challenge using key manager
-func (c *SecureChallenge) SignWithKeyManager(keyManager *KeyManager) error {
+func (c *SecureChallenge) SignWithKeyManager(keyManager KeyManager) error {
 	// Create a copy without signature for signing
 	temp := *c
 	temp.Signature = ""
@@ -257,7 +257,7 @@ func (c *SecureChallenge) SignWithKeyManager(keyManager *KeyManager) error {
 }
 
 // VerifyWithKeyManager validates the challenge's HMAC signature using key manager
-func (c *SecureChallenge) VerifyWithKeyManager(keyManager *KeyManager) error {
+func (c *SecureChallenge) VerifyWithKeyManager(keyManager KeyManager) error {
 	if c.Signature == "" {
 		return fmt.Errorf("challenge has no signature")
 	}
