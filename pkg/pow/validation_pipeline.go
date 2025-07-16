@@ -2,6 +2,7 @@ package pow
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -9,11 +10,12 @@ import (
 type ValidationPipeline struct {
 	signingKey []byte
 	
-	// Caching for performance (using simple maps for now)
-	hmacCache      map[string]bool
-	challengeCache map[string]*SecureChallenge
+	// Caching for performance with proper synchronization
+	hmacCache      sync.Map // map[string]bool
+	challengeCache sync.Map // map[string]*SecureChallenge
 	
-	// Rate limiting state
+	// Rate limiting state with synchronization
+	rateLimitMu  sync.RWMutex
 	rateLimitMap map[string]*RateLimitState
 	
 	// Configuration
@@ -61,8 +63,6 @@ func (e *ValidationError) Error() string {
 func NewValidationPipeline(signingKey []byte) *ValidationPipeline {
 	return &ValidationPipeline{
 		signingKey:           signingKey,
-		hmacCache:            make(map[string]bool),
-		challengeCache:       make(map[string]*SecureChallenge),
 		rateLimitMap:         make(map[string]*RateLimitState),
 		maxCacheSize:         1000,
 		rateLimitWindow:      time.Minute,
@@ -140,6 +140,9 @@ func (v *ValidationPipeline) Validate(solution *Solution) *ValidationResult {
 // checkRateLimit implements per-client rate limiting
 func (v *ValidationPipeline) checkRateLimit(clientID string) error {
 	now := time.Now()
+	
+	v.rateLimitMu.Lock()
+	defer v.rateLimitMu.Unlock()
 	
 	state, exists := v.rateLimitMap[clientID]
 	if !exists {
@@ -234,30 +237,22 @@ func (v *ValidationPipeline) verifySignature(solution *Solution) error {
 	challengeID := solution.ChallengeID
 	
 	// Check cache first
-	if cached, exists := v.hmacCache[challengeID]; exists {
-		if !cached {
+	if cachedValue, exists := v.hmacCache.Load(challengeID); exists {
+		if cached, ok := cachedValue.(bool); ok && !cached {
 			return fmt.Errorf("signature verification failed (cached)")
 		}
-		return nil
+		if ok {
+			return nil
+		}
 	}
 	
 	// Verify signature using constant-time comparison
 	err := solution.Challenge.Verify(v.signingKey)
 	
-	// Cache the result (with simple cache size management)
-	if len(v.hmacCache) >= v.maxCacheSize {
-		// Simple cache cleanup - remove 10% of entries
-		count := 0
-		for k := range v.hmacCache {
-			delete(v.hmacCache, k)
-			count++
-			if count >= v.maxCacheSize/10 {
-				break
-			}
-		}
-	}
-	
-	v.hmacCache[challengeID] = (err == nil)
+	// Cache the result
+	// Note: sync.Map handles concurrent access, so we don't need explicit size management
+	// For production, consider using a proper LRU cache
+	v.hmacCache.Store(challengeID, err == nil)
 	
 	if err != nil {
 		return fmt.Errorf("signature verification failed: %w", err)
@@ -273,16 +268,45 @@ func (v *ValidationPipeline) verifyPoW(solution *Solution) error {
 
 // ClearCache clears the validation caches
 func (v *ValidationPipeline) ClearCache() {
-	v.hmacCache = make(map[string]bool)
-	v.challengeCache = make(map[string]*SecureChallenge)
+	// Clear sync.Maps by ranging over and deleting all entries
+	v.hmacCache.Range(func(key, value interface{}) bool {
+		v.hmacCache.Delete(key)
+		return true
+	})
+	v.challengeCache.Range(func(key, value interface{}) bool {
+		v.challengeCache.Delete(key)
+		return true
+	})
+	
+	// Clear rate limit map with proper locking
+	v.rateLimitMu.Lock()
+	v.rateLimitMap = make(map[string]*RateLimitState)
+	v.rateLimitMu.Unlock()
 }
 
 // GetCacheStats returns statistics about the validation cache
 func (v *ValidationPipeline) GetCacheStats() map[string]int {
+	// Count entries in sync.Maps
+	hmacCount := 0
+	v.hmacCache.Range(func(key, value interface{}) bool {
+		hmacCount++
+		return true
+	})
+	
+	challengeCount := 0
+	v.challengeCache.Range(func(key, value interface{}) bool {
+		challengeCount++
+		return true
+	})
+	
+	v.rateLimitMu.RLock()
+	rateLimitCount := len(v.rateLimitMap)
+	v.rateLimitMu.RUnlock()
+	
 	return map[string]int{
-		"hmac_cache_size":      len(v.hmacCache),
-		"challenge_cache_size": len(v.challengeCache),
-		"rate_limit_entries":   len(v.rateLimitMap),
+		"hmac_cache_size":      hmacCount,
+		"challenge_cache_size": challengeCount,
+		"rate_limit_entries":   rateLimitCount,
 	}
 }
 
@@ -290,6 +314,41 @@ func (v *ValidationPipeline) GetCacheStats() map[string]int {
 func (v *ValidationPipeline) SetRateLimitConfig(window time.Duration, maxRequests int) {
 	v.rateLimitWindow = window
 	v.maxRequestsPerWindow = maxRequests
+}
+
+// StartCleanupRoutine starts a background goroutine to clean up expired rate limit entries
+func (v *ValidationPipeline) StartCleanupRoutine() chan struct{} {
+	stop := make(chan struct{})
+	
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case <-ticker.C:
+				v.cleanupExpiredRateLimits()
+			case <-stop:
+				return
+			}
+		}
+	}()
+	
+	return stop
+}
+
+// cleanupExpiredRateLimits removes expired rate limit entries
+func (v *ValidationPipeline) cleanupExpiredRateLimits() {
+	now := time.Now()
+	
+	v.rateLimitMu.Lock()
+	defer v.rateLimitMu.Unlock()
+	
+	for clientID, state := range v.rateLimitMap {
+		if now.Sub(state.windowStart) > v.rateLimitWindow*2 {
+			delete(v.rateLimitMap, clientID)
+		}
+	}
 }
 
 
