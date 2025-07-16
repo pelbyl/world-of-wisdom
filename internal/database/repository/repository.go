@@ -51,10 +51,6 @@ func (r *txRepository) Queries() *db.Queries {
 	return r.queries
 }
 
-// GetBlockchainStats returns blockchain statistics for transactions
-func (r *txRepository) GetBlockchainStats(ctx context.Context) (db.GetBlockchainStatsRow, error) {
-	return r.queries.GetBlockchainStats(ctx, r.tx)
-}
 
 // WithTx is not supported for transaction repositories
 func (r *txRepository) WithTx(ctx context.Context, fn func(Repository) error) error {
@@ -99,10 +95,6 @@ func (r *repository) Queries() *db.Queries {
 	return r.queries
 }
 
-// GetBlockchainStats returns blockchain statistics
-func (r *repository) GetBlockchainStats(ctx context.Context) (db.GetBlockchainStatsRow, error) {
-	return r.queries.GetBlockchainStats(ctx, r.pool)
-}
 
 // WithTx executes a function within a transaction
 func (r *repository) WithTx(ctx context.Context, fn func(Repository) error) error {

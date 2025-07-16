@@ -95,7 +95,6 @@ func (s *Server) GetStats(c echo.Context) error {
 	totalConnections := int(connectionStats.TotalConnections)
 	activeConnections := int(connectionStats.ActiveConnections)
 	
-	totalSolutions := int(challengeStats.CompletedCount)
 	activeChallengesCount := int(challengeStats.PendingCount + challengeStats.SolvingCount)
 	
 	miningActive := true
@@ -116,10 +115,6 @@ func (s *Server) GetStats(c echo.Context) error {
 		Connections: &ConnectionStats{
 			Total:  &totalConnections,
 			Active: &activeConnections,
-		},
-		Blockchain: &BlockchainStats{
-			Blocks:    &totalSolutions,
-			LastBlock: nil,
 		},
 		Challenges: &ChallengeStats{
 			Active: &activeChallengesCount,

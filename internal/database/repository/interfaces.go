@@ -97,7 +97,6 @@ type Repository interface {
 	
 	// Direct queries access for complex operations
 	Queries() *Queries
-	GetBlockchainStats(ctx context.Context) (db.GetBlockchainStatsRow, error)
 	
 	// Transaction support
 	WithTx(ctx context.Context, fn func(Repository) error) error

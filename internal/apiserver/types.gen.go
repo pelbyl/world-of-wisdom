@@ -164,12 +164,6 @@ type Block struct {
 	Timestamp    *int64     `json:"timestamp,omitempty"`
 }
 
-// BlockchainStats defines model for BlockchainStats.
-type BlockchainStats struct {
-	Blocks    *int   `json:"blocks,omitempty"`
-	LastBlock *Block `json:"lastBlock,omitempty"`
-}
-
 // Challenge defines model for Challenge.
 type Challenge struct {
 	ClientId   *string          `json:"clientId,omitempty"`
@@ -363,7 +357,6 @@ type Solution struct {
 
 // StatsData defines model for StatsData.
 type StatsData struct {
-	Blockchain   *BlockchainStats `json:"blockchain,omitempty"`
 	Challenges   *ChallengeStats  `json:"challenges,omitempty"`
 	Connections  *ConnectionStats `json:"connections,omitempty"`
 	MiningActive *bool            `json:"miningActive,omitempty"`

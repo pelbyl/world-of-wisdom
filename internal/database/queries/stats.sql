@@ -17,14 +17,6 @@ SELECT
 FROM challenges
 WHERE created_at >= NOW() - INTERVAL '24 hours';
 
--- name: GetBlockchainStats :one
--- Get overall system statistics (simplified without blocks)
-SELECT 
-    0::BIGINT as total_blocks,
-    0 as latest_block_index,
-    0.0::FLOAT as avg_block_time_seconds,
-    NOW() as first_block_time,
-    NOW() as last_block_time;
 
 -- name: GetChallengeDistribution :many
 -- Get distribution of challenges by difficulty and algorithm

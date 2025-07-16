@@ -40,10 +40,6 @@ export interface ConnectionStats {
   active: number
 }
 
-export interface BlockchainStats {
-  blocks: number
-  lastBlock: Block | null
-}
 
 export interface ChallengeStats {
   active: number
@@ -59,7 +55,6 @@ export interface StatsData {
   stats: MiningStats
   miningActive: boolean
   connections: ConnectionStats
-  blockchain: BlockchainStats
   challenges: ChallengeStats
   system: SystemStats
 }

@@ -262,8 +262,6 @@ components:
           type: boolean
         connections:
           $ref: "#/components/schemas/ConnectionStats"
-        blockchain:
-          $ref: "#/components/schemas/BlockchainStats"
         challenges:
           $ref: "#/components/schemas/ChallengeStats"
         system:
@@ -293,13 +291,6 @@ components:
         active:
           type: integer
 
-    BlockchainStats:
-      type: object
-      properties:
-        blocks:
-          type: integer
-        lastBlock:
-          $ref: "#/components/schemas/Block"
 
     ChallengeStats:
       type: object

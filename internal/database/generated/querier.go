@@ -29,8 +29,6 @@ type Querier interface {
 	GetActiveHMACKey(ctx context.Context, db DBTX) (HmacKey, error)
 	// Get aggregated metrics with configurable time bucket
 	GetAggregatedMetrics(ctx context.Context, db DBTX, arg GetAggregatedMetricsParams) ([]GetAggregatedMetricsRow, error)
-	// Get overall system statistics (simplified without blocks)
-	GetBlockchainStats(ctx context.Context, db DBTX) (GetBlockchainStatsRow, error)
 	GetChallenge(ctx context.Context, db DBTX, id pgtype.UUID) (Challenge, error)
 	GetChallengeByClientID(ctx context.Context, db DBTX, clientID string) (Challenge, error)
 	// Get distribution of challenges by difficulty and algorithm

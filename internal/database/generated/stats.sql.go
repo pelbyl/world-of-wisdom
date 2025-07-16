@@ -9,37 +9,6 @@ import (
 	"context"
 )
 
-const getBlockchainStats = `-- name: GetBlockchainStats :one
-SELECT 
-    0::BIGINT as total_blocks,
-    0 as latest_block_index,
-    0.0::FLOAT as avg_block_time_seconds,
-    NOW() as first_block_time,
-    NOW() as last_block_time
-`
-
-type GetBlockchainStatsRow struct {
-	TotalBlocks         int64       `json:"total_blocks"`
-	LatestBlockIndex    int32       `json:"latest_block_index"`
-	AvgBlockTimeSeconds float64     `json:"avg_block_time_seconds"`
-	FirstBlockTime      interface{} `json:"first_block_time"`
-	LastBlockTime       interface{} `json:"last_block_time"`
-}
-
-// Get overall system statistics (simplified without blocks)
-func (q *Queries) GetBlockchainStats(ctx context.Context, db DBTX) (GetBlockchainStatsRow, error) {
-	row := db.QueryRow(ctx, getBlockchainStats)
-	var i GetBlockchainStatsRow
-	err := row.Scan(
-		&i.TotalBlocks,
-		&i.LatestBlockIndex,
-		&i.AvgBlockTimeSeconds,
-		&i.FirstBlockTime,
-		&i.LastBlockTime,
-	)
-	return i, err
-}
-
 const getChallengeDistribution = `-- name: GetChallengeDistribution :many
 SELECT 
     difficulty,
