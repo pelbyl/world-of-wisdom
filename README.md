@@ -165,6 +165,9 @@ metrics(time, metric_name, metric_value, labels, server_instance)
 
 -- Logs (activity logs)  
 logs(id, timestamp, level, message, icon, metadata, created_at)
+
+-- HMAC Keys (encrypted key storage)
+hmac_keys(id, encrypted_key, encrypted_previous_key, created_at, rotated_at, is_active)
 ```
 
 #### 2. **TCP Server** (Port 8080) - Core PoW Engine
@@ -279,9 +282,9 @@ interface MetricsData {
 │ 1. Request  │───►│ 2. Generate │───►│ 3. Store    │
 │             │    │   Signed    │    │ Challenge   │
 │             │◄───│  Challenge  │    │  Metadata   │
-│             │    │             │    │             │
-│ 4. Solve +  │───►│ 5. Fast     │    │             │
-│   Submit    │    │ Validation  │    │             │
+│             │    │             │    │         &   │
+│ 4. Solve +  │───►│ 5. Fast     │    │ Encrypted   │
+│   Submit    │    │ Validation  │    │      Keys   │
 │             │◄───│ 6. Wisdom   │◄───│ 7. Log      │
 └─────────────┘    └─────────────┘    └─────────────┘
 ```
@@ -339,6 +342,10 @@ POSTGRES_PASSWORD=wisdom123
 ALGORITHM=argon2  # or sha256
 DIFFICULTY=2
 ADAPTIVE_MODE=true
+
+# Security Configuration
+# IMPORTANT: Change this in production to a secure random string (min 32 chars)
+WOW_MASTER_SECRET=your-production-secret-min-32-chars
 ```
 
 ## 🧪 Testing & Demo
@@ -409,7 +416,7 @@ world-of-wisdom/
 │   ├── server/                   # TCP server implementation
 │   ├── apiserver/                # API server implementation
 │   ├── client/                   # Client implementation
-│   ├── blockchain/               # Blockchain implementation
+│   ├── behavior/                 # Client behavior tracking
 │   └── database/                 # Database layer
 │       ├── generated/            # SQLC generated code
 │       ├── migrations/           # Database schema
@@ -419,6 +426,7 @@ world-of-wisdom/
 │   ├── pow/                      # PoW algorithms (Argon2/SHA256)
 │   ├── config/                   # Configuration management
 │   ├── metrics/                  # Metrics collection
+│   ├── logger/                   # Secure logging with sanitization
 │   └── wisdom/                   # Quote management
 ├── web/                          # React frontend
 │   ├── src/
@@ -478,7 +486,7 @@ world-of-wisdom/
 
 ### Secure Challenge System
 
-The system now implements a comprehensive security framework inspired by proven cryptographic protocols:
+The system implements a comprehensive security framework with cryptographic best practices:
 
 #### 1. **HMAC-Signed Challenges**
 
@@ -503,6 +511,8 @@ type SecureChallenge struct {
 - **Replay Prevention**: Unique nonces and timestamps prevent challenge reuse
 - **Time-based Expiration**: Challenges expire after 5 minutes to limit attack windows
 - **Integrity Verification**: Server validates signature before processing solutions
+- **Persistent Keys**: HMAC keys stored encrypted in PostgreSQL (AES-GCM with master secret)
+- **Key Rotation**: Automatic key rotation with previous key retention for seamless transitions
 
 #### 2. **Fast Validation Pipeline**
 
@@ -541,9 +551,10 @@ func (v *ValidationPipeline) Validate(solution *Solution) *ValidationResult {
 
 **Performance Benefits:**
 - **Fail-Fast Design**: Invalid requests rejected quickly to save resources
-- **HMAC Caching**: Signature verification results cached for repeated challenges
-- **Rate Limiting**: Per-client request throttling prevents validation spam
+- **HMAC Caching**: Signature verification results cached using thread-safe sync.Map
+- **Rate Limiting**: Per-client request throttling with mutex-protected state management
 - **Constant-Time Operations**: Timing attack resistance throughout validation
+- **Concurrent Safety**: All shared state protected against race conditions
 
 #### 3. **Binary Protocol Support**
 
@@ -560,6 +571,8 @@ Binary Challenge Format (75+ bytes):
 - **Faster Parsing**: Direct memory mapping vs JSON parsing
 - **Auto-Detection**: Client automatically detects format (JSON starts with '{', binary doesn't)
 - **Configurable Format**: Server can use either binary or JSON via CHALLENGE_FORMAT env var
+- **Secure Parsing**: Proper bounds checking with io.ReadFull prevents buffer overflows
+- **Length Validation**: All binary data lengths validated before processing
 
 #### 4. **Security Features**
 
