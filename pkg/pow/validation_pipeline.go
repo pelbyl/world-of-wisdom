@@ -238,10 +238,10 @@ func (v *ValidationPipeline) verifySignature(solution *Solution) error {
 	
 	// Check cache first
 	if cachedValue, exists := v.hmacCache.Load(challengeID); exists {
-		if cached, ok := cachedValue.(bool); ok && !cached {
-			return fmt.Errorf("signature verification failed (cached)")
-		}
-		if ok {
+		if cached, ok := cachedValue.(bool); ok {
+			if !cached {
+				return fmt.Errorf("signature verification failed (cached)")
+			}
 			return nil
 		}
 	}

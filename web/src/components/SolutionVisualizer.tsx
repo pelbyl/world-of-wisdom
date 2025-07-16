@@ -7,7 +7,7 @@ interface Props {
   blocks: Block[]
 }
 
-export function BlockchainVisualizer({ blocks }: Props) {
+export function SolutionVisualizer({ blocks }: Props) {
   const [activePage, setActivePage] = useState(1)
   const blocksPerPage = 6 // Show 6 blocks per page for better performance
 

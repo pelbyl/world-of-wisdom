@@ -7,7 +7,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"world-of-wisdom/internal/database/repository"
-	"world-of-wisdom/internal/blockchain"
 	"world-of-wisdom/internal/behavior"
 	"github.com/jackc/pgx/v5/pgxpool"
 	generated "world-of-wisdom/internal/database/generated"
@@ -16,15 +15,13 @@ import (
 type Server struct {
 	db              *pgxpool.Pool
 	repo            repository.Repository
-	blockchain      *blockchain.Blockchain
 	behaviorTracker *behavior.Tracker
 }
 
-func NewServer(database *pgxpool.Pool, bc *blockchain.Blockchain) *Server {
+func NewServer(database *pgxpool.Pool) *Server {
 	return &Server{
 		db:              database,
 		repo:            repository.New(database),
-		blockchain:      bc,
 		behaviorTracker: behavior.NewTracker(database),
 	}
 }
@@ -45,7 +42,7 @@ func (s *Server) GetHealth(c echo.Context) error {
 	// Calculate active challenges (pending + solving)
 	activeChallenges := int(challengeStats.PendingCount + challengeStats.SolvingCount)
 	liveConnections := int(connectionStats.ActiveConnections)
-	totalBlocks := 0 // TODO: Get from blockchain when available
+	totalBlocks := int(challengeStats.CompletedCount)
 	miningActive := true
 	
 	// Get current difficulty from most recent challenge
@@ -80,7 +77,7 @@ func (s *Server) GetStats(c echo.Context) error {
 	// Get all required stats
 	challengeStats, _ := s.repo.Challenges().GetStats(ctx)
 	connectionStats, _ := s.repo.Connections().GetStats(ctx)
-	blockchainStats, _ := s.repo.GetBlockchainStats(ctx)
+	// Get solution statistics instead of blockchain stats
 	
 	// Convert types properly
 	totalChallenges := int(challengeStats.TotalCount)
@@ -98,7 +95,7 @@ func (s *Server) GetStats(c echo.Context) error {
 	totalConnections := int(connectionStats.TotalConnections)
 	activeConnections := int(connectionStats.ActiveConnections)
 	
-	totalBlocks := int(blockchainStats.TotalBlocks)
+	totalSolutions := int(challengeStats.CompletedCount)
 	activeChallengesCount := int(challengeStats.PendingCount + challengeStats.SolvingCount)
 	
 	miningActive := true
@@ -121,8 +118,8 @@ func (s *Server) GetStats(c echo.Context) error {
 			Active: &activeConnections,
 		},
 		Blockchain: &BlockchainStats{
-			Blocks:    &totalBlocks,
-			LastBlock: nil, // TODO: Implement when blockchain is available
+			Blocks:    &totalSolutions,
+			LastBlock: nil,
 		},
 		Challenges: &ChallengeStats{
 			Active: &activeChallengesCount,
@@ -374,7 +371,7 @@ func (s *Server) GetRecentSolves(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to get recent solves")
 	}
 	
-	// Convert to blockchain blocks format
+	// Convert solutions to block-like format for UI compatibility
 	blocks := make([]Block, len(solutions))
 	for i, sol := range solutions {
 		index := i

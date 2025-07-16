@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"world-of-wisdom/internal/apiserver"
-	"world-of-wisdom/internal/blockchain"
 	"world-of-wisdom/pkg/config"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -54,11 +53,8 @@ func main() {
 	}
 	log.Println("✅ Connected to PostgreSQL database")
 
-	// Initialize blockchain (in-memory for now)
-	bc := blockchain.NewBlockchain()
-
 	// Create API server with handlers
-	apiServer := apiserver.NewServer(dbpool, bc)
+	apiServer := apiserver.NewServer(dbpool)
 
 	// Setup Echo routes
 	e := apiServer.SetupRoutes()

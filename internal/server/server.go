@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -231,7 +230,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 	remoteAddr, err := netip.ParseAddr(strings.Split(clientAddr, ":")[0])
 	if err != nil {
 		log.Printf("Failed to parse remote address %s: %v", logger.SanitizeIP(clientAddr), err)
-		return
+		// Send proper error response based on format
+		if s.challengeFormat == pow.FormatBinary {
+			// For binary format, just close the connection
+			return
+		} else {
+			conn.Write([]byte("Error: Invalid client address\n"))
+			return
+		}
 	}
 
 	// Get previous behavior if exists
@@ -321,7 +327,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 	secureChallenge, err = pow.GenerateSecureChallengeWithKeyManager(difficulty, s.algorithm, clientID, s.keyManager)
 	if err != nil {
 		log.Printf("Failed to generate secure challenge: %v", err)
-		conn.Write([]byte("Error: Failed to generate challenge\n"))
+		if s.challengeFormat == pow.FormatBinary {
+			// For binary format, just close the connection
+			return
+		} else {
+			conn.Write([]byte("Error: Failed to generate challenge\n"))
+		}
 		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
 		return
 	}
@@ -355,7 +366,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 	challengeData, err := s.challengeEncoder.Encode(secureChallenge, s.challengeFormat)
 	if err != nil {
 		log.Printf("Failed to encode challenge: %v", err)
-		conn.Write([]byte("Error: Failed to generate challenge\n"))
+		if s.challengeFormat == pow.FormatBinary {
+			// For binary format, just close the connection
+			return
+		} else {
+			conn.Write([]byte("Error: Failed to generate challenge\n"))
+		}
 		s.updateConnectionStatus(ctx, connectionRecord.ID, generated.ConnectionStatusFailed)
 		return
 	}
@@ -527,7 +543,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 		metrics.RecordPuzzleFailed(difficulty)
 		metrics.RecordProcessingTime("failed", time.Since(startTime))
 
-		conn.Write([]byte("Error: Invalid proof of work\n"))
+		if s.challengeFormat == pow.FormatBinary {
+			// For binary format, just close the connection without message
+			// The client will handle disconnection appropriately
+		} else {
+			conn.Write([]byte("Error: Invalid proof of work\n"))
+		}
 	}
 	
 	// Connection status will be updated by defer
