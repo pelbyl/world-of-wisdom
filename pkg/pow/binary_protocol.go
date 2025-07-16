@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -271,23 +272,34 @@ func (t *ChallengeTransport) SendChallenge(conn net.Conn, challenge *SecureChall
 func (t *ChallengeTransport) ReceiveChallenge(conn net.Conn, clientID string) (*SecureChallenge, ChallengeFormat, error) {
 	// Read header (format + length)
 	header := make([]byte, 5)
-	_, err := conn.Read(header)
+	n, err := readFull(conn, header)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read challenge header: %w", err)
+	}
+	if n != 5 {
+		return nil, "", fmt.Errorf("incomplete header read: got %d bytes, expected 5", n)
 	}
 	
 	formatByte := header[0]
 	dataLength := binary.BigEndian.Uint32(header[1:5])
 	
-	if dataLength > 10*1024 { // 10KB max
-		return nil, "", fmt.Errorf("challenge data too large: %d bytes", dataLength)
+	// Validate data length to prevent integer overflow and excessive allocation
+	const maxChallengeSize = 10 * 1024 // 10KB max
+	if dataLength == 0 {
+		return nil, "", fmt.Errorf("invalid challenge data length: 0")
+	}
+	if dataLength > maxChallengeSize {
+		return nil, "", fmt.Errorf("challenge data too large: %d bytes (max %d)", dataLength, maxChallengeSize)
 	}
 	
-	// Read challenge data
+	// Read challenge data with proper bounds checking
 	data := make([]byte, dataLength)
-	_, err = conn.Read(data)
+	n, err = readFull(conn, data)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read challenge data: %w", err)
+	}
+	if n != int(dataLength) {
+		return nil, "", fmt.Errorf("incomplete data read: got %d bytes, expected %d", n, dataLength)
 	}
 	
 	// Determine format
@@ -385,4 +397,10 @@ func (m *MigrationHelper) ConvertFormat(data []byte, fromFormat, toFormat Challe
 	}
 	
 	return result, nil
+}
+
+// readFull reads exactly len(buf) bytes from r into buf.
+// It returns the number of bytes copied and an error if fewer bytes were read.
+func readFull(r io.Reader, buf []byte) (n int, err error) {
+	return io.ReadFull(r, buf)
 }
